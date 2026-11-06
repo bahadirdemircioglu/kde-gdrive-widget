@@ -63,12 +63,12 @@ BACKUP_ROOT="${GDRIVE_BACKUP:-$HOME/.local/share/gdrive-sync/backup}"
 BACKUP="$BACKUP_ROOT/$(date +%F)"
 
 COMMON=(
-  --filters-file "$FILTERS"   # .venv, __pycache__ vb. senkronlanmaz
   --transfers 8 --checkers 16
   --log-file "$LOG" --log-level INFO
 )
 [ -n "${GDRIVE_STATS:-}" ] && COMMON+=(--stats "$GDRIVE_STATS")   # ilk senkronda sik ilerleme
 BISYNC=(
+  --filters-file "$FILTERS"   # .venv, __pycache__ vb. senkronlanmaz (bisync'e ozgu secenek)
   --create-empty-src-dirs
   --drive-export-formats desktop  # Google Dokumanlar tarayicida acilan .desktop kisayolu olur
   --conflict-resolve newer    # Cakismada yeni olan kazanir
@@ -86,13 +86,14 @@ case "$MODE" in
   upload)
     # Sadece yukleme: Drive'da hicbir sey silinmez; ustune yazilan surum Drive surum gecmisinde kalir.
     echo "$(date '+%F %T') === senkron (sadece yukleme) ===" >>"$LOG"
-    rclone copy "$LOCAL" "$REMOTE" --drive-skip-gdocs "${COMMON[@]}" || fail "Yukleme hatasi"
+    rclone copy "$LOCAL" "$REMOTE" --drive-skip-gdocs --filter-from "$FILTERS" "${COMMON[@]}" \
+      || fail "Yukleme hatasi"
     ;;
   download)
     # Sadece indirme: yerelde hicbir sey silinmez; ustune yazilan yerel dosya $BACKUP'a gider.
     echo "$(date '+%F %T') === senkron (sadece indirme) ===" >>"$LOG"
     rclone copy "$REMOTE" "$LOCAL" --drive-export-formats desktop --backup-dir "$BACKUP" \
-      "${COMMON[@]}" || fail "Indirme hatasi"
+      --filter-from "$FILTERS" "${COMMON[@]}" || fail "Indirme hatasi"
     ;;
   *)
     if [ "$RESYNC" = 1 ]; then

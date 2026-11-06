@@ -222,9 +222,10 @@ def step_preview(remote, remote_path, local):
             "--drive-skip-gdocs", "--checkers", "16"]
     filters = gc.paths()["filters"]
     if os.path.exists(filters):
-        args += ["--filters-file", filters]
+        args += ["--filter-from", filters]  # (--filters-file exists only for bisync)
     p = rclone(args, timeout=3600)
-    keys = {"=": "same", "-": "onlyDrive", "+": "onlyLocal", "*": "different"}
+    # rclone check SRC DST --combined: "+" only in SRC (Drive), "-" only in DST (here)
+    keys = {"=": "same", "+": "onlyDrive", "-": "onlyLocal", "*": "different"}
     for line in p.stdout.splitlines():
         key = keys.get(line[:2].strip()) if line[1:2] == " " else None
         if key:
@@ -372,7 +373,7 @@ def step_apply_run(remote, remote_path, local, mode, first):
                     "--create-empty-src-dirs", "--log-file", os.path.join(p["state"], "sync.log"),
                     "--log-level", "INFO"]
             if os.path.exists(p["filters"]):
-                args += ["--filters-file", p["filters"]]
+                args += ["--filter-from", p["filters"]]
             if rclone(args, timeout=None).returncode != 0:
                 raise StepError("sync", "making the folder match Drive failed")
             update_setup(setAside=aside)

@@ -138,6 +138,8 @@ exit "${{RC_EXIT:-0}}"
         self.assertEqual(a[a.index("--backup-dir1") + 1], self.backup_today())
         self.assertEqual(a[a.index("--drive-export-formats") + 1], "desktop")
         self.assertNotIn("--drive-skip-gdocs", a)
+        self.assertIn("--filters-file", a)
+        self.assertNotIn("--filter-from", a)
 
     def test_upload_only_copies_up_and_never_deletes(self):
         self.write_config("upload")
@@ -146,6 +148,8 @@ exit "${{RC_EXIT:-0}}"
         a = self.call("copy")
         self.assertEqual(a[1:3], [str(self.local), "gdrive:"])
         self.assertIn("--drive-skip-gdocs", a)
+        self.assertIn("--filter-from", a)  # copy has no --filters-file (bisync only)
+        self.assertNotIn("--filters-file", a)
         self.assertFalse([x for x in a if x.startswith("--delete") or x.startswith("--backup-dir")])
         self.assertFalse([c for c in self.rclone_calls() if c.startswith("bisync|")])
         st = self.status()
@@ -160,6 +164,8 @@ exit "${{RC_EXIT:-0}}"
         self.assertEqual(a[1:3], ["gdrive:", str(self.local)])
         self.assertEqual(a[a.index("--drive-export-formats") + 1], "desktop")
         self.assertEqual(a[a.index("--backup-dir") + 1], self.backup_today())
+        self.assertIn("--filter-from", a)
+        self.assertNotIn("--filters-file", a)
         self.assertFalse([x for x in a if x.startswith("--delete")])
 
     def test_old_backups_are_pruned_after_success(self):

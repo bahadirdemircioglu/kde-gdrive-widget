@@ -149,13 +149,14 @@ class ShortStepsTest(SetupBase):
         d.mkdir()
         (d / "x").write_text("x")
         check = self.t / "check.txt"
-        check.write_text("= same.txt\n- only drive.pdf\n- Klasör/iki.pdf\n+ only here.txt\n* changed.xlsx\n")
+        check.write_text("= same.txt\n+ only drive.pdf\n+ Klasör/iki.pdf\n- only here.txt\n* changed.xlsx\n")
         r = self.setup("preview", "gdrive:", "", str(d), FAKE_CHECK=str(check))
         self.assertEqual((r["same"], r["onlyDrive"], r["onlyLocal"], r["different"]), (1, 2, 1, 1))
         self.assertTrue(r["needsChoice"])
         c = [c for c in self.rclone_calls() if c[0] == "check"][0]
         self.assertEqual(c[1:3], ["gdrive:", str(d)])
-        check.write_text("= same.txt\n- only drive.pdf\n")
+        self.assertNotIn("--filters-file", c)
+        check.write_text("= same.txt\n+ only drive.pdf\n")
         self.assertFalse(self.setup("preview", "gdrive:", "", str(d), FAKE_CHECK=str(check))["needsChoice"])
 
     def test_preview_of_empty_folder_needs_no_check(self):
@@ -412,7 +413,7 @@ class WizardTest(SetupBase):
         full.mkdir()
         (full / "only-here.txt").write_text("x")
         check = self.t / "check.txt"
-        check.write_text("+ only-here.txt\n- a.pdf\n")
+        check.write_text("- only-here.txt\n+ a.pdf\n")
         # home refused -> full folder -> two-way -> choice 2 (match) -> confirm
         p = self.wizard(f"\n\n{self.home}\n{full}\n1\n2\n\n", FAKE_CHECK=str(check))
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
