@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Google Drive <-> ~/GoogleDrive iki yonlu senkron (rclone bisync)
+# Google Drive senkronu: iki yonlu (rclone bisync), sadece yukleme ya da sadece indirme (rclone copy)
 set -uo pipefail
 
 . "$(dirname "$(readlink -f "$0")")/gdrive-lib.sh"   # REMOTE, LOCAL, MODE, CONF_DIR
@@ -18,7 +18,11 @@ if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 20000000 ]; then mv -f "$LOG" "
 
 # Durum dosyasi (Plasma widget'i okur). Yardimci hata verse bile senkron etkilenmez.
 STATUS_BIN="$(dirname "$(readlink -f "$0")")/gdrive-status"
-status() { [ -x "$STATUS_BIN" ] && GDRIVE_LOCAL="$LOCAL" "$STATUS_BIN" "$@" >/dev/null 2>&1; return 0; }
+status() {
+  [ -x "$STATUS_BIN" ] && GDRIVE_LOCAL="$LOCAL" GDRIVE_REMOTE="$REMOTE" GDRIVE_MODE="$MODE" \
+    "$STATUS_BIN" "$@" >/dev/null 2>&1
+  return 0
+}
 
 # Ardisik hatalari say; 3. hatada ve sonra saatte bir masaustu bildirimi gonder.
 # (17 Ekim 2026'da kalan bir kilit yuzunden senkron 19 gun sessizce durmustu.)
@@ -53,37 +57,62 @@ if ! rclone lsd "$REMOTE" --max-depth 1 >/dev/null 2>&1; then
   exit 0
 fi
 
-ARGS=(
-  --create-empty-src-dirs
-  --drive-skip-gdocs          # Google Docs/Sheets indirilemez, atla
-  --conflict-resolve newer    # Cakismada yeni olan kazanir
-  --conflict-loser pathname   # Kaybeden dosya silinmez, ..conflict1 olarak saklanir
-  --max-delete 25             # Tek seferde %25'ten fazla silme olursa dur (guvenlik)
-  --resilient                 # Gecici hatalarda kendini toparlar
-  --recover
-  --max-lock 5m               # Yarida kalan calismanin kilidi 5 dk sonra gecersiz olur
+# Senkronun degistirdigi ya da sildigi her yerel dosya buraya tasinir (gunluk klasor, 30 gun).
+BACKUP_ROOT="${GDRIVE_BACKUP:-$HOME/.local/share/gdrive-sync/backup}"
+BACKUP="$BACKUP_ROOT/$(date +%F)"
+
+COMMON=(
   --filters-file "$FILTERS"   # .venv, __pycache__ vb. senkronlanmaz
   --transfers 8 --checkers 16
   --log-file "$LOG" --log-level INFO
 )
+BISYNC=(
+  --create-empty-src-dirs
+  --drive-export-formats desktop  # Google Dokumanlar tarayicida acilan .desktop kisayolu olur
+  --conflict-resolve newer    # Cakismada yeni olan kazanir
+  --conflict-loser delete     # Kaybeden klasorde kalmaz: yerelde $BACKUP'a, Drive'da cope gider
+  --backup-dir1 "$BACKUP"
+  --max-delete 25             # Tek seferde %25'ten fazla silme olursa dur (guvenlik)
+  --resilient                 # Gecici hatalarda kendini toparlar
+  --recover
+  --max-lock 5m               # Yarida kalan calismanin kilidi 5 dk sonra gecersiz olur
+  "${COMMON[@]}"
+)
 
-# Ilk calistirmada temel durumun olusturulmasi gerekir
 status begin
-if [ "$RESYNC" = 1 ]; then
-  echo "$(date '+%F %T') === ELLE ISTENEN --resync ===" >>"$LOG"
-  if rclone bisync "$LOCAL" "$REMOTE" --resync "${ARGS[@]}"; then
-    touch "$STATE/initialized"
-  else
-    fail "--resync BASARISIZ"
-  fi
-elif [ ! -f "$STATE/initialized" ]; then
-  echo "$(date '+%F %T') ERROR : bisync baseline not initialized; run gdrive-setup" >>"$LOG"
-  fail "Senkron kurulumu tamamlanmamis (temel durum yok). gdrive-setup calistirin"
-else
-  echo "$(date '+%F %T') === senkron ===" >>"$LOG"
-  rclone bisync "$LOCAL" "$REMOTE" "${ARGS[@]}" || \
-    fail "Senkron hatasi. --resync calistirmadan once log'u incele (iki tarafi birlestirir)"
-fi
+case "$MODE" in
+  upload)
+    # Sadece yukleme: Drive'da hicbir sey silinmez; ustune yazilan surum Drive surum gecmisinde kalir.
+    echo "$(date '+%F %T') === senkron (sadece yukleme) ===" >>"$LOG"
+    rclone copy "$LOCAL" "$REMOTE" --drive-skip-gdocs "${COMMON[@]}" || fail "Yukleme hatasi"
+    ;;
+  download)
+    # Sadece indirme: yerelde hicbir sey silinmez; ustune yazilan yerel dosya $BACKUP'a gider.
+    echo "$(date '+%F %T') === senkron (sadece indirme) ===" >>"$LOG"
+    rclone copy "$REMOTE" "$LOCAL" --drive-export-formats desktop --backup-dir "$BACKUP" \
+      "${COMMON[@]}" || fail "Indirme hatasi"
+    ;;
+  *)
+    if [ "$RESYNC" = 1 ]; then
+      echo "$(date '+%F %T') === ELLE ISTENEN --resync ===" >>"$LOG"
+      if rclone bisync "$LOCAL" "$REMOTE" --resync "${BISYNC[@]}"; then
+        touch "$STATE/initialized"
+      else
+        fail "--resync BASARISIZ"
+      fi
+    elif [ ! -f "$STATE/initialized" ]; then
+      echo "$(date '+%F %T') ERROR : bisync baseline not initialized; run gdrive-setup" >>"$LOG"
+      fail "Senkron kurulumu tamamlanmamis (temel durum yok). gdrive-setup calistirin"
+    else
+      echo "$(date '+%F %T') === senkron ===" >>"$LOG"
+      rclone bisync "$LOCAL" "$REMOTE" "${BISYNC[@]}" || \
+        fail "Senkron hatasi. --resync calistirmadan once log'u incele (iki tarafi birlestirir)"
+    fi
+    ;;
+esac
 rm -f "$FAILS"
 status end ok
+# 30 gunden eski yedek klasorlerini temizle
+[ -d "$BACKUP_ROOT" ] && find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
+  -exec rm -rf -- {} + 2>/dev/null
 echo "$(date '+%F %T') tamam." >>"$LOG"

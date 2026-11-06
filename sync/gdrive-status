@@ -32,6 +32,13 @@ QUEUE_RE = re.compile(r"INFO  : - (Path[12])\s+(Queue copy to Path[12]|Queue del
 DONE_RE = re.compile(r"INFO  : (.+): (Copied \(|Deleted$|Updated modification time)")
 FILES_PROGRESS_RE = re.compile(r"^Transferred:\s+(\d+) / (\d+), ")
 REMOTE_PREFIX_RE = re.compile(r"^[^:/]+(\{[^}]*\})?:/?")
+# conflict losers: "NOTICE: - Path1   Deleting Path1 copy   - /local/a.txt" (newer won) or
+# "Renaming Path1 copy - /local/a.txt.conflict1" (no winner: rclone keeps both copies)
+CONFLICT_RE = re.compile(r": - (Path[12])\s+(?:Deleting|Renaming) Path[12] copy\s+- (.+)$")
+CONFLICT_SUFFIX_RE = re.compile(r"\.conflict\d+$")
+# rclone copy (one-way modes): "INFO  : dir/file: Copied (new)"
+COPIED_RE = re.compile(r"INFO  : (.+): Copied \(")
+DUPLICATE_RE = re.compile(r"NOTICE: (.+?): Duplicate (?:object|directory) found")
 PHASES = [
     ("Building Path1 and Path2 listings", "listing"),
     ("Path1 checking for diffs", "comparing"),
@@ -55,6 +62,11 @@ def env(name, default):
 HOME = os.path.expanduser("~")
 SETTINGS = gc.effective()
 LOCAL = env("GDRIVE_LOCAL", (SETTINGS or {}).get("local") or os.path.join(HOME, "GoogleDrive")).rstrip("/")
+MODE = env("GDRIVE_MODE", (SETTINGS or {}).get("mode") or "twoway")
+REMOTE_PATH = (gc.split_remote(os.environ["GDRIVE_REMOTE"])[1] if os.environ.get("GDRIVE_REMOTE")
+               else (SETTINGS or {}).get("remotePath", ""))
+BACKUP_DIR = gc.paths()["conflicts"]
+SKIP_DIRS = {".venv", "__pycache__", "node_modules"}
 STATE = env("GDRIVE_STATE", os.path.join(HOME, ".local/state/gdrive-sync"))
 BISYNC_DIR = env("GDRIVE_BISYNC_DIR", os.path.join(HOME, ".cache/rclone/bisync"))
 SERVICE = env("GDRIVE_SERVICE", "gdrive-sync.service")
@@ -79,21 +91,37 @@ def classify(text):
     return "unknown"
 
 
-def _relative(path, local_root):
+def _relative(path, local_root, remote_path=""):
     root = local_root.rstrip("/") + "/"
     if path.startswith(root):
         return path[len(root):]
-    return REMOTE_PREFIX_RE.sub("", path, count=1)
+    path = REMOTE_PREFIX_RE.sub("", path, count=1)
+    prefix = remote_path.strip("/") + "/" if remote_path.strip("/") else ""
+    return path[len(prefix):] if prefix and path.startswith(prefix) else path
 
 
-def parse_run(text, local_root):
-    """Parses the sync.log slice of one run."""
+def parse_run(text, local_root, mode="twoway", remote_path=""):
+    """Parses the sync.log slice of one run (bisync, or rclone copy in the one-way modes)."""
+    if mode in ("upload", "download"):
+        return _parse_copy(text, "up" if mode == "upload" else "down")
     changes, done, phase, progress, ok, err_lines = [], set(), None, None, False, []
+    conflicts, duplicates = [], []
     for line in text.splitlines():
+        m = CONFLICT_RE.search(line)
+        if m:
+            path = CONFLICT_SUFFIX_RE.sub("", _relative(m.group(2).rstrip(), local_root, remote_path))
+            if path not in conflicts:
+                conflicts.append(path)
+            continue
+        m = DUPLICATE_RE.search(line)
+        if m:
+            if m.group(1) not in duplicates:
+                duplicates.append(m.group(1))
+            continue
         m = QUEUE_RE.search(line)
         if m:
             side, action, target = m.groups()
-            path = _relative(target.rstrip(), local_root)
+            path = _relative(target.rstrip(), local_root, remote_path)
             if action == "Queue delete":
                 kind = "deleted_remote" if side == "Path2" else "deleted_local"
             else:
@@ -119,8 +147,36 @@ def parse_run(text, local_root):
     if err_lines and not ok:
         error = {"code": classify("\n".join(err_lines)), "lines": err_lines[-ERROR_LINES:]}
     current = [dict(c, done=c["path"] in done) for c in changes][:CURRENT_MAX]
-    return {"changes": changes, "current": current, "phase": phase,
-            "progress": progress, "ok": ok, "error": error}
+    changes = [{"kind": "conflict", "path": p} for p in conflicts] + changes
+    return {"changes": changes, "current": current, "phase": phase, "progress": progress,
+            "ok": ok, "error": error, "duplicates": duplicates}
+
+
+def _parse_copy(text, kind):
+    changes, progress, err_lines, duplicates = [], None, [], []
+    for line in text.splitlines():
+        m = COPIED_RE.search(line)
+        if m:
+            changes.append({"kind": kind, "path": m.group(1)})
+            continue
+        m = DUPLICATE_RE.search(line)
+        if m:
+            if m.group(1) not in duplicates:
+                duplicates.append(m.group(1))
+            continue
+        m = FILES_PROGRESS_RE.match(line)
+        if m:
+            progress = {"done": int(m.group(1)), "total": int(m.group(2))}
+            continue
+        if "ERROR" in line or "NOTICE: Failed" in line:
+            err_lines.append(line.strip())
+    error = None
+    if err_lines:
+        error = {"code": classify("\n".join(err_lines)), "lines": err_lines[-ERROR_LINES:]}
+    phase = "transferring" if changes or progress else "listing"
+    current = [dict(c, done=True) for c in changes][-CURRENT_MAX:]
+    return {"changes": changes, "current": current, "phase": phase, "progress": progress,
+            "ok": error is None, "error": error, "duplicates": duplicates}
 
 
 # ---------- status file ----------
@@ -167,8 +223,21 @@ def fail_count():
         return 0
 
 
+def bisync_slug(local_root):
+    """rclone names its listings '<local>..<remote>.path1.lst' with / : ? * and spaces as '_'."""
+    return re.sub(r"[\s\\/:?*]", "_", local_root.strip("/"))
+
+
 def file_count():
-    lists = glob.glob(os.path.join(BISYNC_DIR, "*.path1.lst"))
+    if MODE in ("upload", "download"):
+        n = 0
+        for _root, dirs, files in os.walk(LOCAL):
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+            n += len(files)
+        return n
+    prefix = bisync_slug(LOCAL) + ".."
+    lists = [f for f in glob.glob(os.path.join(BISYNC_DIR, "*.path1.lst"))
+             if os.path.basename(f).startswith(prefix)]
     if not lists:
         return None
     newest = max(lists, key=os.path.getmtime)
@@ -199,10 +268,11 @@ def cmd_begin():
 
 def cmd_end(result):
     st = load_status()
-    run = parse_run(read_run_log(int(st.get("logOffset") or 0)), LOCAL)
+    run = parse_run(read_run_log(int(st.get("logOffset") or 0)), LOCAL, MODE, REMOTE_PATH)
     at = now_iso()
     recent = [dict(c, at=at) for c in run["changes"]] + list(st.get("recent") or [])
-    st.update(version=1, lastRunAt=at, recent=recent[:RECENT_MAX], failCount=fail_count())
+    st.update(version=1, lastRunAt=at, recent=recent[:RECENT_MAX], failCount=fail_count(),
+              mode=MODE, backupDir=BACKUP_DIR, duplicates=run["duplicates"])
     count = file_count()
     if count is not None:
         st["fileCount"] = count
@@ -239,12 +309,13 @@ def cmd_show():
     st = load_status()
     active = service_active()
     out = dict(st) if st.get("state") else {"state": "missing"}
-    out.update(serviceActive=active, localRoot=LOCAL, logPath=LOG)
+    out.update(serviceActive=active, localRoot=LOCAL, logPath=LOG, mode=MODE, backupDir=BACKUP_DIR,
+               remotePath=REMOTE_PATH)
     if out["state"] == "syncing":
         if not active:
             out["state"] = "paused"
         else:
-            run = parse_run(read_run_log(int(st.get("logOffset") or 0)), LOCAL)
+            run = parse_run(read_run_log(int(st.get("logOffset") or 0)), LOCAL, MODE, REMOTE_PATH)
             out.update(phase=run["phase"] or "listing", progress=run["progress"], current=run["current"])
     elif out["state"] != "missing" and not active:
         out["state"] = "paused"

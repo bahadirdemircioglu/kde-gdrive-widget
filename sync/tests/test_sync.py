@@ -115,6 +115,65 @@ exit "${{RC_EXIT:-0}}"
         bisync = [c for c in self.rclone_calls() if c.startswith("bisync|")][0].split("|")
         self.assertEqual(bisync[1:3], [str(self.home / "b"), "other:"])
 
+    def write_config(self, mode, local=None):
+        cfg = self.home / ".config/gdrive-sync/config"
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        self.local = local or self.home / "Drive"
+        cfg.write_text(f"REMOTE=gdrive:\nLOCAL={self.local}\nMODE={mode}\nVERSION=1\n")
+
+    def call(self, verb):
+        found = [c.split("|")[:-1] for c in self.rclone_calls() if c.startswith(verb + "|")]
+        self.assertEqual(len(found), 1, self.rclone_calls())
+        return found[0]
+
+    def backup_today(self):
+        return str(self.home / ".local/share/gdrive-sync/backup" / time.strftime("%Y-%m-%d"))
+
+    def test_twoway_args(self):
+        self.write_config("twoway")
+        self.assertEqual(self.sync().returncode, 0)
+        a = self.call("bisync")
+        self.assertEqual(a[1:3], [str(self.local), "gdrive:"])
+        self.assertEqual(a[a.index("--conflict-loser") + 1], "delete")
+        self.assertEqual(a[a.index("--backup-dir1") + 1], self.backup_today())
+        self.assertEqual(a[a.index("--drive-export-formats") + 1], "desktop")
+        self.assertNotIn("--drive-skip-gdocs", a)
+
+    def test_upload_only_copies_up_and_never_deletes(self):
+        self.write_config("upload")
+        (self.state / "initialized").unlink()
+        self.assertEqual(self.sync(BISYNC_LINE="x INFO  : f.txt: Copied (new)").returncode, 0)
+        a = self.call("copy")
+        self.assertEqual(a[1:3], [str(self.local), "gdrive:"])
+        self.assertIn("--drive-skip-gdocs", a)
+        self.assertFalse([x for x in a if x.startswith("--delete") or x.startswith("--backup-dir")])
+        self.assertFalse([c for c in self.rclone_calls() if c.startswith("bisync|")])
+        st = self.status()
+        self.assertEqual(st["state"], "synced")
+        self.assertEqual(st["recent"][0], {**st["recent"][0], "kind": "up", "path": "f.txt"})
+
+    def test_download_only_copies_down_with_backup(self):
+        self.write_config("download")
+        (self.state / "initialized").unlink()
+        self.assertEqual(self.sync().returncode, 0)
+        a = self.call("copy")
+        self.assertEqual(a[1:3], ["gdrive:", str(self.local)])
+        self.assertEqual(a[a.index("--drive-export-formats") + 1], "desktop")
+        self.assertEqual(a[a.index("--backup-dir") + 1], self.backup_today())
+        self.assertFalse([x for x in a if x.startswith("--delete")])
+
+    def test_old_backups_are_pruned_after_success(self):
+        backup = self.home / ".local/share/gdrive-sync/backup"
+        old, new = backup / "2026-09-01", backup / "2026-11-01"
+        old.mkdir(parents=True)
+        new.mkdir()
+        (old / "x.txt").write_text("x")
+        t = time.time() - 40 * 86400
+        os.utime(old, (t, t))
+        self.assertEqual(self.sync().returncode, 0)
+        self.assertFalse(old.exists())
+        self.assertTrue(new.exists())
+
     def test_missing_helper_never_breaks_the_sync(self):
         (self.src / "gdrive-status").unlink()
         self.assertEqual(self.sync().returncode, 0)

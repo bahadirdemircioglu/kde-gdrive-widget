@@ -81,12 +81,12 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 - New change kind `conflict` from `New or changed in both paths` NOTICE lines (path relative). status.json adds `mode`, `duplicates: [str]` (last run), `backupDir` (`paths()["conflicts"]`, now `~/.local/share/gdrive-sync/backup`); `show` passes them through.
 - After a successful run `gdrive-sync` deletes dated backup folders older than 30 days (`find "$BACKUP" -mindepth 1 -maxdepth 1 -type d -mtime +30`).
 
-- [ ] Tests first: copy fixtures → kinds/paths; duplicates parsed; `file_count` ignores a scratch `.lst` with another slug; fake rclone receives, per mode:
+- [x] Tests first: copy fixtures → kinds/paths; duplicates parsed; `file_count` ignores a scratch `.lst` with another slug; fake rclone receives, per mode:
   - twoway: `bisync LOCAL TARGET … --conflict-loser delete --backup-dir1 <backup>/<YYYY-MM-DD> --drive-export-formats desktop`, no `pathname`, no `--drive-skip-gdocs`;
   - upload: `copy LOCAL TARGET --drive-skip-gdocs --filters-file …`, no `bisync`, no `--delete*`;
   - download: `copy TARGET LOCAL --drive-export-formats desktop --backup-dir <backup>/<YYYY-MM-DD>`;
   - one-way modes do not require `initialized`.
-- [ ] Implement; tie `Renaming Path1 copy` lines also produce a `conflict` change. All tests pass. Commit "Sync modes and conflict backups".
+- [x] Implement; tie `Renaming Path1 copy` lines also produce a `conflict` change. All tests pass. Commit "Sync modes and conflict backups".
 
 ### Task 4: Daemon by mode
 

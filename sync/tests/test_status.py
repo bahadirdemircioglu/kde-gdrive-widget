@@ -70,6 +70,48 @@ class ParseRunTest(unittest.TestCase):
         self.assertEqual(gs.parse_run("x INFO  : Path1 checking for diffs\n", "/l")["phase"], "comparing")
         self.assertIsNone(gs.parse_run("", "/l")["phase"])
 
+    def test_copy_down_log_all_changes_are_downloads(self):
+        r = gs.parse_run((FIX / "run_copy_down.log").read_text(), "/l", mode="download")
+        self.assertEqual(r["changes"], [{"kind": "down", "path": p} for p in
+                                        ["b.txt.conflict1", "link.desktop", "b.txt.conflict2", "a.txt"]])
+        self.assertEqual(r["progress"], {"done": 4, "total": 4})
+        self.assertEqual(r["phase"], "transferring")
+        self.assertTrue(r["ok"])
+        self.assertIsNone(r["error"])
+        self.assertTrue(all(c["done"] for c in r["current"]))
+
+    def test_copy_up_log_all_changes_are_uploads(self):
+        r = gs.parse_run((FIX / "run_copy_up.log").read_text(), "/l", mode="upload")
+        self.assertEqual(r["changes"], [{"kind": "up", "path": "a.txt"},
+                                        {"kind": "up", "path": "Alt Klasör/Şirket teklif.pdf"}])
+        self.assertEqual(r["progress"], {"done": 2, "total": 2})
+
+    def test_copy_error_is_not_ok(self):
+        r = gs.parse_run("x ERROR : a.txt: Failed to copy: googleapi: Error 403: insufficientFilePermissions\n",
+                         "/l", mode="upload")
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["error"]["code"], "permission")
+
+    def test_conflicts_from_loser_delete_and_tie_rename(self):
+        text = ("x NOTICE: - WARNING  New or changed in both paths       - same.txt\n"
+                "x NOTICE: - Path1    Deleting Path1 copy                - /l/Dir/a.txt\n"
+                "x NOTICE: - Path1    Renaming Path1 copy                - /l/b.txt.conflict1\n"
+                "x NOTICE: - Path2    Renaming Path2 copy                - gdrive{X}:Docs/b.txt.conflict2\n")
+        r = gs.parse_run(text, "/l", remote_path="Docs")
+        self.assertEqual(r["changes"], [{"kind": "conflict", "path": "Dir/a.txt"},
+                                        {"kind": "conflict", "path": "b.txt"}])
+
+    def test_remote_path_is_stripped_from_queue_lines(self):
+        text = "x INFO  : - Path1   Queue copy to Path2   - gdrive{AB}:Belgeler/2026/x y.pdf\n"
+        r = gs.parse_run(text, "/l", remote_path="Belgeler/2026")
+        self.assertEqual(r["changes"], [{"kind": "up", "path": "x y.pdf"}])
+
+    def test_duplicates_on_drive_are_collected(self):
+        text = ("x NOTICE: Rapor.pdf: Duplicate object found in source - ignoring\n"
+                "x NOTICE: Proje/Eski: Duplicate directory found in source - ignoring\n"
+                "x NOTICE: Rapor.pdf: Duplicate object found in source - ignoring\n")
+        self.assertEqual(gs.parse_run(text, "/l")["duplicates"], ["Rapor.pdf", "Proje/Eski"])
+
     def test_byte_transfer_line_is_not_file_progress(self):
         r = gs.parse_run("Transferred:   \t    0 B / 0 B, -, 0 B/s, ETA -\n", "/l")
         self.assertIsNone(r["progress"])
@@ -165,7 +207,7 @@ class CliTest(CliBase):
             f.write("2026/11/06 14:01:13 INFO  : Şirket/Teklif 2026 [Conflict].pdf: Copied (new)\n"
                     "2026/11/06 14:01:13 INFO  : Updating listings\n"
                     "2026/11/06 14:01:14 INFO  : Bisync successful\n")
-        (self.bisync / "x..y.path1.lst").write_text(
+        (self.bisync / "home_u_GoogleDrive..gdrive_.path1.lst").write_text(
             '# bisync listing\n- 1 md5 - 2026 "a.txt"\nd -1 - - 2026 "dir"\n- 2 md5 - 2026 "dir/b.txt"\n')
         self.cli("end", "ok")
         st = self.status()
@@ -176,6 +218,33 @@ class CliTest(CliBase):
         self.assertEqual([c["kind"] for c in st["recent"]], ["up", "deleted_remote", "down", "deleted_local"])
         self.assertTrue(all("at" in c for c in st["recent"]))
         self.assertEqual(st["lastSuccessAt"], st["lastRunAt"])
+
+    def test_file_count_uses_the_listing_of_our_pair(self):
+        self.log.write_text("")
+        ours = self.bisync / "home_u_GoogleDrive..gdrive_.path1.lst"
+        ours.write_text('- 1 md5 - 2026 "a.txt"\n')
+        other = self.bisync / "tmp_scratch_local..gdrive__test.path1.lst"
+        other.write_text('- 1 md5 - 2026 "a"\n- 1 md5 - 2026 "b"\n- 1 md5 - 2026 "c"\n')
+        os.utime(ours, (1, 1))
+        self.cli("begin")
+        self.cli("end", "ok")
+        self.assertEqual(self.status()["fileCount"], 1)
+
+    def test_one_way_file_count_walks_the_folder(self):
+        local = pathlib.Path(self.tmp.name) / "local"
+        (local / "d" / ".venv").mkdir(parents=True)
+        (local / "a.txt").write_text("a")
+        (local / "d" / "b.txt").write_text("b")
+        (local / "d" / ".venv" / "junk.py").write_text("x")
+        self.env.update(GDRIVE_LOCAL=str(local), GDRIVE_MODE="download")
+        self.log.write_text("")
+        self.cli("begin")
+        self.cli("end", "ok")
+        st = self.status()
+        self.assertEqual(st["fileCount"], 2)
+        self.assertEqual(st["mode"], "download")
+        self.assertEqual(self.show()["mode"], "download")
+        self.assertTrue(st["backupDir"].endswith("/.local/share/gdrive-sync/backup"))
 
     def test_end_fail_reads_fail_counter_and_keeps_last_success(self):
         self.log.write_text("")
