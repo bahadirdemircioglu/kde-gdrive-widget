@@ -14,7 +14,7 @@ xgettext \
     --from-code=UTF-8 -C -kde \
     -ci18n -ki18n:1 -ki18nc:1c,2 -ki18np:1,2 -ki18ncp:1c,2,3 \
     --package-name="${DOMAIN}" --package-version="${VERSION}" \
-    --msgid-bugs-address="https://github.com/bahadirdemircioglu/gdrive-sync-plasma/issues" \
+    --msgid-bugs-address="https://github.com/bahadirdemircioglu/kde-gdrive-widget/issues" \
     --no-location --sort-output \
     -o translations/template.pot "${FILES[@]}"
 # keep the header stable between runs (no timestamp churn in git)
