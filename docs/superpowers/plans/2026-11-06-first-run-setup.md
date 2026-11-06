@@ -16,10 +16,10 @@
 
 - Config file `~/.config/gdrive-sync/config`, lines `KEY=value`, keys `REMOTE` (with colon, e.g. `gdrive:`), `REMOTE_PATH` (empty = My Drive root), `LOCAL`, `MODE` (`twoway|upload|download`), `VERSION=1`, optional `CREATED_REMOTE=1`, `LEGACY=1`. Never `source`d/`eval`ed; unknown keys ignored. Env `GDRIVE_REMOTE`, `GDRIVE_LOCAL`, `GDRIVE_MODE` override.
 - Sync target = `REMOTE + REMOTE_PATH` (`gdrive:` + `Belgeler` → `gdrive:Belgeler`).
-- Dirs: state `~/.local/state/gdrive-sync/` (status.json, setup.json, sync.log), installed scripts `~/.local/share/gdrive-sync/bin/`, conflicts `~/.local/share/gdrive-sync/conflicts/`, set-aside `~/.local/share/gdrive-sync/set-aside-<YYYY-MM-DD>/`.
+- Dirs: state `~/.local/state/gdrive-sync/` (status.json, setup.json, sync.log), installed scripts `~/.local/share/gdrive-sync/bin/`, backup `~/.local/share/gdrive-sync/backup/<YYYY-MM-DD>/` (pruned after 30 days), set-aside `~/.local/share/gdrive-sync/set-aside-<YYYY-MM-DD>/`.
 - States: existing six plus `unconfigured`. New error code `not_initialized`.
 - **Nothing ever runs `bisync --resync` except** `gdrive-setup apply` (after the first-sync rules) and a human typing `gdrive-sync --resync`.
-- One-way modes never delete on the target side; files they overwrite go to a backup (download → `--backup-dir` conflicts dir; upload → Drive version history).
+- One-way modes never delete on the target side; files they overwrite go to a backup (download → `--backup-dir` dated backup dir; upload → Drive version history).
 - rclone minimum 1.66; inotify-tools optional; the widget never runs `sudo`.
 - Commands the widget runs are built with `Status.shellQuote`; no user text is ever concatenated unquoted.
 - All writes of status.json / setup.json / config are atomic (tmp + rename).
@@ -31,7 +31,7 @@
 - Service starts before `apply` finished, or `initialized` vanished → `gdrive-sync` must fail with `not_initialized`, never resync (Task 1 test).
 - `show` is polled every 2–10 s → migration check is one `stat` of the config path when it exists; migration writes once and is idempotent (Task 1 test).
 - Scratch/test bisync writing `.lst` files into `~/.cache/rclone/bisync` → live `fileCount` wrong (Task 2 uses `--workdir`; Task 3 test asserts `file_count` ignores other workdirs).
-- Conflict tie (equal modtimes, no winner) with `--conflict-loser delete` → both copies leave the folder; must be recoverable (local in conflicts dir, Drive in trash) and counted as "kept aside" (Task 2 records, Task 3 test).
+- Conflict tie (equal modtimes, no winner): verified in Task 2 — rclone renames both to `.conflict1`/`.conflict2` despite `delete`; must be surfaced as a `conflict` change, not silently left (Task 3 test).
 - `setup.json` half-written or stale (`running` but unit gone after reboot) while the widget polls → `show` reports `setup.state = "failed"` with code `interrupted`, never an eternal spinner (Task 6 test).
 
 ---
@@ -45,7 +45,7 @@
 **Files:** Create `sync/gdrive_common.py`, `sync/tests/test_common.py`. Modify `sync/gdrive-status`, `sync/gdrive-sync`, `sync/tests/test_status.py`, `sync/tests/test_sync.py`.
 
 **Interfaces — Produces** (`gdrive_common`, imported by scripts via `sys.path.insert(0, dirname(realpath(__file__)))`):
-- `paths(env: dict) -> dict` keys `home, config, state, setupJson, share, bin, conflicts, unitDir, unit` (honours `HOME`, `XDG_CONFIG_HOME`, `GDRIVE_STATE`).
+- `paths(env: dict) -> dict` keys `home, config, filters, state, setupJson, share, bin, conflicts, unitDir, unit, localBin` (honours `HOME`, `XDG_CONFIG_HOME`, `GDRIVE_STATE`).
 - `read_config(path) -> dict` (missing/garbled file → `{}`), `write_config(path, values: dict) -> None` (atomic, fixed key order).
 - `effective(env) -> dict | None` → `{remote, remotePath, target, local, mode, createdRemote, legacy}` or `None` when unconfigured; env overrides applied.
 - `detect_legacy(env) -> dict | None` — no config, unit file exists, `state/initialized` exists → values `REMOTE=GDRIVE_REMOTE or "gdrive:"`, `LOCAL=GDRIVE_LOCAL or ~/GoogleDrive`, `MODE=twoway`, `LEGACY=1`.
@@ -64,12 +64,12 @@
 
 Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir` under the session scratchpad. Never the live pair, never the default workdir.
 
-- [ ] Create a Google Doc there: `rclone copy t.docx gdrive:_gdrive-sync-test-…/ --drive-import-formats docx`; add two plain files.
-- [ ] Bisync `--resync` into an empty scratch local with `--drive-export-formats desktop --workdir <scratch>`; then two normal runs. Pass = `.desktop` exists and runs 2–3 log `No changes found`.
-- [ ] Conflict: edit the same plain file on both sides (Drive side newer) → run with `--conflict-resolve newer --conflict-loser delete --backup-dir1 <scratch>/conflicts`; expect local loser in backup dir, no `.conflict` file in folder. Tie: same modtime both sides (`touch -d` + `rclone touch -t`) → record exactly where both copies end up.
-- [ ] Capture `rclone copy` (both directions, `--log-level INFO`, `--backup-dir`) logs as the two fixtures.
-- [ ] Purge the scratch Drive folder (goes to Drive trash). Write findings (pass/fallback, tie behaviour) into the spec. Commit "Verify docs export and conflict handling".
-- [ ] If `.desktop` is unstable: keep `--drive-skip-gdocs` everywhere and Task 3 adds a `gdocsSkipped` count from `rclone lsf -R --files-only --drive-only-gdocs TARGET` (fallback per spec).
+- [x] Create a Google Doc there: `rclone copy t.docx gdrive:_gdrive-sync-test-…/ --drive-import-formats docx`; add two plain files.
+- [x] Bisync `--resync` into an empty scratch local with `--drive-export-formats desktop --workdir <scratch>`; then two normal runs. Pass = `.desktop` exists and runs 2–3 log `No changes found`.
+- [x] Conflict: edit the same plain file on both sides (Drive side newer) → run with `--conflict-resolve newer --conflict-loser delete --backup-dir1 <scratch>/conflicts`; expect local loser in backup dir, no `.conflict` file in folder. Tie: same modtime both sides (`touch -d` + `rclone touch -t`) → record exactly where both copies end up.
+- [x] Capture `rclone copy` (both directions, `--log-level INFO`, `--backup-dir`) logs as the two fixtures.
+- [x] Purge the scratch Drive folder (goes to Drive trash). Write findings (pass/fallback, tie behaviour) into the spec. Commit "Verify docs export and conflict handling".
+- [x] ~~If `.desktop` is unstable~~ (stable — not needed):: keep `--drive-skip-gdocs` everywhere and Task 3 adds a `gdocsSkipped` count from `rclone lsf -R --files-only --drive-only-gdocs TARGET` (fallback per spec).
 
 ### Task 3: `gdrive-sync` modes, conflicts, counts
 
@@ -78,14 +78,15 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 **Interfaces — Produces:**
 - `parse_run(text, local_root, mode="twoway")`: in `upload`/`download`, every `INFO  : <rel>: Copied (…)` is a change of kind `up`/`down`; `phase` `"transferring"` once any copy line or progress appears, else `"listing"`; `Duplicate object found`/`Duplicate directory found` lines → `run["duplicates"]` (unique names).
 - `file_count(mode)`: twoway → newest `*.path1.lst` **in `BISYNC_DIR` whose name contains the local root's bisync slug** (not just newest); one-way → `os.walk(LOCAL)` file count skipping `.venv`, `__pycache__`, `node_modules`.
-- status.json adds `mode`, `duplicates: [str]` (last run), `conflictsKept: int` (files under conflicts dir); `show` passes them through.
+- New change kind `conflict` from `New or changed in both paths` NOTICE lines (path relative). status.json adds `mode`, `duplicates: [str]` (last run), `backupDir` (`paths()["conflicts"]`, now `~/.local/share/gdrive-sync/backup`); `show` passes them through.
+- After a successful run `gdrive-sync` deletes dated backup folders older than 30 days (`find "$BACKUP" -mindepth 1 -maxdepth 1 -type d -mtime +30`).
 
 - [ ] Tests first: copy fixtures → kinds/paths; duplicates parsed; `file_count` ignores a scratch `.lst` with another slug; fake rclone receives, per mode:
-  - twoway: `bisync LOCAL TARGET … --conflict-loser delete --backup-dir1 <conflicts> --drive-export-formats desktop` (or `--drive-skip-gdocs` per Task 2), no `pathname`;
+  - twoway: `bisync LOCAL TARGET … --conflict-loser delete --backup-dir1 <backup>/<YYYY-MM-DD> --drive-export-formats desktop`, no `pathname`, no `--drive-skip-gdocs`;
   - upload: `copy LOCAL TARGET --drive-skip-gdocs --filters-file …`, no `bisync`, no `--delete*`;
-  - download: `copy TARGET LOCAL --drive-export-formats desktop --backup-dir <conflicts>/<date>`;
+  - download: `copy TARGET LOCAL --drive-export-formats desktop --backup-dir <backup>/<YYYY-MM-DD>`;
   - one-way modes do not require `initialized`.
-- [ ] Implement; tie result from Task 2 counted in `conflictsKept`. All tests pass. Commit "Sync modes and conflict backups".
+- [ ] Implement; tie `Renaming Path1 copy` lines also produce a `conflict` change. All tests pass. Commit "Sync modes and conflict backups".
 
 ### Task 4: Daemon by mode
 

@@ -1,0 +1,26 @@
+2026/11/06 14:40:31 INFO  : a.txt: Moved (server-side)
+2026/11/06 14:40:31 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:                 2 / 2, 100%, Listed 5
+Renamed:                1
+Transferred:            0 / 4, 0%
+Server Side Moves:      1 @ 11 B
+Elapsed time:         1.0s
+Transferring:
+ *                               b.txt.conflict1: transferring
+ *                               b.txt.conflict2: transferring
+ *                                  link.desktop: transferring
+ *                                         a.txt: transferring
+
+2026/11/06 14:40:31 INFO  : b.txt.conflict1: Copied (new)
+2026/11/06 14:40:31 INFO  : link.desktop: Copied (new)
+2026/11/06 14:40:31 INFO  : b.txt.conflict2: Copied (new)
+2026/11/06 14:40:31 INFO  : a.txt: Copied (new)
+2026/11/06 14:40:31 INFO  : 
+Transferred:   	         80 B / 80 B, 100%, 0 B/s, ETA -
+Checks:                 2 / 2, 100%, Listed 5
+Renamed:                1
+Transferred:            4 / 4, 100%
+Server Side Moves:      1 @ 11 B
+Elapsed time:         1.0s
+

@@ -33,7 +33,7 @@ def paths(env=None):
         "setupJson": os.path.join(state, "setup.json"),
         "share": share,
         "bin": os.path.join(share, "bin"),
-        "conflicts": os.path.join(share, "conflicts"),
+        "conflicts": os.path.join(share, "backup"),  # replaced/deleted local files, dated, 30 days
         "unitDir": unit_dir,
         "unit": os.path.join(unit_dir, env.get("GDRIVE_SERVICE") or SERVICE),
         "localBin": os.path.join(home, ".local/bin"),

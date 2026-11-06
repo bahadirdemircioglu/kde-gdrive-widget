@@ -40,7 +40,7 @@ class ConfigTest(Base):
     def test_paths(self):
         self.assertEqual(self.p["config"], f"{self.home}/.config/gdrive-sync/config")
         self.assertEqual(self.p["state"], f"{self.home}/.local/state/gdrive-sync")
-        self.assertEqual(self.p["conflicts"], f"{self.home}/.local/share/gdrive-sync/conflicts")
+        self.assertEqual(self.p["conflicts"], f"{self.home}/.local/share/gdrive-sync/backup")
         self.assertEqual(self.p["unit"], f"{self.home}/.config/systemd/user/gdrive-sync.service")
         env = dict(self.env, XDG_CONFIG_HOME=str(self.t / "cfg"))
         self.assertEqual(gc.paths(env)["config"], f"{self.t}/cfg/gdrive-sync/config")

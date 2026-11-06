@@ -1,0 +1,38 @@
+2026/11/06 14:40:33 INFO  : 
+Transferred:   	          2 B / 7 B, 29%, 0 B/s, ETA -
+Checks:                 1 / 1, 100%, Listed 7
+Transferred:            0 / 2, 0%
+Elapsed time:         1.0s
+Transferring:
+ *                                         a.txt:100% / 2 B, 0 B/s, -
+ *                  Alt Klasör/Şirket teklif.pdf:  0% / 5 B, 0 B/s, -
+
+2026/11/06 14:40:34 INFO  : a.txt: Copied (replaced existing)
+2026/11/06 14:40:34 INFO  : 
+Transferred:   	          7 B / 7 B, 100%, 1 B/s, ETA 0s
+Checks:                 1 / 1, 100%, Listed 7
+Transferred:            1 / 2, 50%
+Elapsed time:         2.0s
+Transferring:
+ *                  Alt Klasör/Şirket teklif.pdf:100% / 5 B, 0 B/s, -
+
+2026/11/06 14:40:35 INFO  : Alt Klasör/Şirket teklif.pdf: Copied (new)
+2026/11/06 14:40:35 INFO  : 
+Transferred:   	          7 B / 7 B, 100%, 3 B/s, ETA 0s
+Checks:                 1 / 1, 100%, Listed 7
+Transferred:            2 / 2, 100%
+Elapsed time:         3.0s
+
+2026/11/06 14:40:36 INFO  : 
+Transferred:   	          7 B / 7 B, 100%, 3 B/s, ETA 0s
+Checks:                 1 / 1, 100%, Listed 7
+Transferred:            2 / 2, 100%
+Elapsed time:         4.0s
+
+2026/11/06 14:40:37 INFO  : Alt Klasör: Set directory modification time (using DirSetModTime)
+2026/11/06 14:40:37 INFO  : 
+Transferred:   	          7 B / 7 B, 100%, 3 B/s, ETA 0s
+Checks:                 1 / 1, 100%, Listed 7
+Transferred:            2 / 2, 100%
+Elapsed time:         4.8s
+

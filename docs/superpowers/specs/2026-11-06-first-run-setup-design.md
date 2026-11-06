@@ -49,9 +49,20 @@ a folder I choose, and no extra files get created.** They delegated all other de
 ### No-extra-files rules
 - **Conflicts** (same file changed on both sides): newer wins (`--conflict-resolve newer`);
   the older version is not renamed into the folder (`--conflict-loser delete`) but kept:
-  local losers go to `--backup-dir1 ~/.local/share/gdrive-sync/conflicts/` (outside the synced
-  folder); Drive losers are covered by Drive's own version history / trash. The widget shows
-  "N conflicts kept aside" with an "Open" button.
+  local losers go to `--backup-dir1 ~/.local/share/gdrive-sync/backup/<YYYY-MM-DD>/` (outside
+  the synced folder); Drive losers go to Drive's trash. The widget lists conflicts as a
+  change kind `conflict` ("older copy kept aside") with an "Open" button for the backup.
+  - *Verified 2026-11-06 (rclone 1.75.2, scratch folder):* `--backup-dir1` receives **every**
+    local file that a sync replaces or deletes, not only conflict losers. That is a useful
+    safety net, so it stays, in dated folders, and folders older than 30 days are pruned after
+    a successful run.
+  - *Tie* (both sides changed, identical modification time, so no winner): rclone ignores
+    `delete` and renames both copies (`name.conflict1` local, `name.conflict2` Drive) on both
+    sides. Needs identical times to the millisecond, so practically only by hand; accepted as
+    the one exception to "no extra files": nothing is lost, and the widget reports it as a
+    conflict ("two copies kept, keep one").
+- **Download only** passes `--backup-dir` (same dated folder) so a local edit overwritten by
+  Drive's version is kept. **Upload only** relies on Drive's version history.
 - **First sync never unions blindly.** Local folder empty → plain download. Both sides have
   files → the wizard runs a dry run and shows counts (only on Drive / only here / different),
   then offers: *Use another (empty) folder* (recommended) · *Make this folder match Drive*
@@ -71,9 +82,10 @@ a folder I choose, and no extra files get created.** They delegated all other de
   never converted into a Google Doc.
 - Two-way: deleting the shortcut locally trashes the document on Drive (faithful two-way).
   Upload-only: Google docs are not touched (`--drive-skip-gdocs`).
-- **Must be verified in the implementation task** with bisync on a scratch Drive folder:
-  shortcuts must not show up as "changed" on every run (unknown size). Fallback if they do:
-  skip Google docs and show "N Google documents are only in the browser" in the widget.
+- *Verified 2026-11-06 on a scratch Drive folder:* after the first run, two more bisync runs
+  report "No changes found"; a document changed on Drive replaces the local shortcut once and
+  is stable again; deleting the shortcut locally moves the document to Drive's trash; a plain
+  local `.desktop` file uploads as a normal file and stays stable. So no fallback is needed.
 
 ### Account connection
 - `rclone config create <name> drive scope=drive` (full access, needed for two-way) with
@@ -182,7 +194,9 @@ One program, two front ends:
 ## Calls I made on the user's behalf (for review)
 1. One folder pair, whole My Drive by default.
 2. Two-way is the default mode; one-way modes never delete.
-3. Conflict losers go to a hidden backup folder, not next to the file.
+3. Conflict losers (and every local file a sync replaces or deletes) go to a hidden dated
+   backup folder kept 30 days; exact-time ties are the one case where rclone keeps two
+   `.conflict` copies.
 4. First sync with two non-empty sides asks, and recommends an empty folder.
 5. Google docs appear as `.desktop` shortcuts (with a verified fallback).
 6. Drive duplicate names are reported, not renamed.
