@@ -142,7 +142,7 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 - `helperCommand(installedCmd, bundledDir, action) -> string` — `test -x <installed> && <installed> <action> || python3 <quoted bundled>/gdrive-status <action>`; `setupCommand(bundledDir, args[]) -> string` (prefers `$HOME/.local/bin/gdrive-setup`, all args quoted, ends with `--json`).
 - `Setup.js`: `pages(checks, needsChoice, mode) -> [ "requirements"?, "account", "driveFolder", "localFolder", "mode", "preview"?, "progress", "done" ]` (requirements only when a required check fails; preview only when twoway and `needsChoice`); `canNext(page, draft) -> bool`; `applyArgs(draft) -> [remote, remotePath, local, mode, firstSync]` (one-way → `none`; `ours` → `resume`; empty local → `empty`).
 
-- [ ] Tests first (incl. `setupCommand` with `'`, `$()`, spaces through a real `sh`), implement, `npm test` green. Commit.
+- [x] Tests first (incl. `setupCommand` with `'`, `$()`, spaces through a real `sh`), implement, `npm test` green. Commit.
 
 ### Task 9: Widget UI
 

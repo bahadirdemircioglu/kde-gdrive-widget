@@ -109,3 +109,73 @@ test("openCommand: file inside the sync root, folder for deleted items", () => {
   assert.equal(S.openCommand("/home/u/GoogleDrive", { kind: "up", path: "../../etc/passwd" }), "");
   assert.equal(S.openCommand("", { kind: "up", path: "a" }), "");
 });
+
+test("parseShow: unconfigured keeps checks and setup progress", () => {
+  const m = S.parseShow(JSON.stringify({
+    state: "unconfigured",
+    checks: { rclone: true, rcloneVersion: "1.75.2", rcloneOk: true, python: true, systemd: true, inotify: false,
+      pkgManager: "pacman", installCommand: "sudo pacman -S --needed inotify-tools" },
+    setup: { step: "apply", state: "running", phase: "transferring", progress: { done: 3, total: 9 },
+      target: { remote: "gdrive:", remotePath: "", local: "/home/u/GD", mode: "twoway", firstSync: "empty" },
+      authUrl: "http://127.0.0.1:53682/auth?state=x", error: null },
+  }));
+  assert.equal(m.state, "unconfigured");
+  assert.equal(m.checks.rcloneOk, true);
+  assert.equal(m.checks.inotify, false);
+  assert.equal(m.checks.installCommand, "sudo pacman -S --needed inotify-tools");
+  assert.equal(m.setup.state, "running");
+  assert.deepEqual(m.setup.progress, { done: 3, total: 9 });
+  assert.equal(m.setup.target.local, "/home/u/GD");
+  assert.equal(m.setup.authUrl, "http://127.0.0.1:53682/auth?state=x");
+});
+
+test("parseShow: setup garbage is null, unknown setup states dropped, auth url must be local", () => {
+  assert.equal(S.parseShow(JSON.stringify({ state: "unconfigured", setup: "x" })).setup, null);
+  assert.equal(S.parseShow(JSON.stringify({ state: "unconfigured", setup: { step: "apply", state: "weird" } })).setup, null);
+  const m = S.parseShow(JSON.stringify({ state: "unconfigured", setup: { step: "connect", state: "running", authUrl: "https://evil.example/" } }));
+  assert.equal(m.setup.authUrl, "");
+  assert.deepEqual(S.parseShow(JSON.stringify({ state: "unconfigured" })).checks.rcloneOk, false);
+});
+
+test("parseShow: mode, conflicts, duplicates, backupDir, not_initialized", () => {
+  const m = S.parseShow(JSON.stringify({
+    state: "error", mode: "download", backupDir: "/home/u/.local/share/gdrive-sync/backup",
+    duplicates: ["Rapor.pdf", 5], createdRemote: true,
+    lastError: { code: "not_initialized", lines: [] },
+    recent: [{ kind: "conflict", path: "a.txt", at: "2026-11-06T10:00:00+03:00" }],
+  }));
+  assert.equal(m.mode, "download");
+  assert.deepEqual(m.duplicates, ["Rapor.pdf"]);
+  assert.equal(m.backupDir, "/home/u/.local/share/gdrive-sync/backup");
+  assert.equal(m.createdRemote, true);
+  assert.equal(m.lastError.code, "not_initialized");
+  assert.equal(m.recent[0].kind, "conflict");
+  assert.equal(S.parseShow(JSON.stringify({ state: "synced", mode: "sideways" })).mode, "twoway");
+  assert.equal(S.kindIcon("conflict"), "vcs-conflicting");
+});
+
+test("nextPollMs: a running setup polls every second", () => {
+  assert.equal(S.nextPollMs("unconfigured", false, { state: "running" }), 1000);
+  assert.equal(S.nextPollMs("unconfigured", true, { state: "done" }), 5000);
+  assert.equal(S.badgeIcon("unconfigured"), "state-warning");
+});
+
+test("helperCommand and setupCommand quote everything and fall back to the bundled copy", () => {
+  const bundled = "/home/u/.local/share/plasma/plasmoids/x/contents/code/sync";
+  assert.equal(S.helperCommand('"$HOME/.local/bin/gdrive-status"', bundled, "show"),
+    `"$HOME/.local/bin/gdrive-status" show 2>/dev/null || python3 '${bundled}/gdrive-status' show`);
+  assert.equal(S.helperCommand('"$HOME/.local/bin/gdrive-status"', "", "now"), '"$HOME/.local/bin/gdrive-status" now');
+  const nasty = "/tmp/it's $(id) dir";
+  const cmd = S.setupCommand(nasty, ["check-local", "/home/u/Google Sürücü's"]);
+  assert.equal(cmd, `python3 '/tmp/it'\\''s $(id) dir/gdrive-setup' 'check-local' '/home/u/Google Sürücü'\\''s' --json`);
+  const out = execFileSync("sh", ["-c", cmd.replace(/^python3 /, "printf '%s|' ")], { encoding: "utf8" });
+  assert.equal(out, `${nasty}/gdrive-setup|check-local|/home/u/Google Sürücü's|--json|`);
+  assert.equal(S.setupCommand("", ["check"]), `"$HOME/.local/bin/gdrive-setup" 'check' --json`);
+});
+
+test("bundledDir: file URL of the plasmoid code folder to a path", () => {
+  assert.equal(S.bundledDir("file:///home/u/.local/share/plasma/plasmoids/x/contents/code/sync"),
+    "/home/u/.local/share/plasma/plasmoids/x/contents/code/sync");
+  assert.equal(S.bundledDir("file:///home/u/G%C3%BCzel%20dir/code/sync"), "/home/u/Güzel dir/code/sync");
+  assert.equal(S.bundledDir("qrc:/x"), "");
+});
