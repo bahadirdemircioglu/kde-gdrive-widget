@@ -212,5 +212,54 @@ class DaemonTriggerTest(unittest.TestCase):
                 daemon.wait(timeout=5)
 
 
+class DaemonModeTest(unittest.TestCase):
+    def start(self, mode):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        t = self.t = pathlib.Path(self.tmp.name)
+        src = t / "sync"
+        src.mkdir()
+        for name in ("gdrive-syncd", "gdrive-status", "gdrive_common.py", "gdrive-lib.sh"):
+            shutil.copy(ROOT / name, src / name)
+        self.runs = t / "runs"
+        (src / "gdrive-sync").write_text(f'#!/bin/bash\necho run >> "{self.runs}"\n')
+        (src / "gdrive-sync").chmod(0o755)
+        fakebin = t / "bin"
+        fakebin.mkdir()
+        self.inotify_calls = t / "inotify_calls"
+        (fakebin / "inotifywait").write_text(f'#!/bin/bash\necho "$@" >> "{self.inotify_calls}"\nsleep 60\n')
+        (fakebin / "inotifywait").chmod(0o755)
+        self.env = dict(os.environ, HOME=str(t / "home"), XDG_RUNTIME_DIR=str(t / "run"),
+                        GDRIVE_LOCAL=str(t / "drive"), GDRIVE_MODE=mode, PATH=f"{fakebin}:/usr/bin:/bin")
+        self.daemon = subprocess.Popen([str(src / "gdrive-syncd")], env=self.env)
+        self.addCleanup(lambda: (self.daemon.terminate(), self.daemon.wait(timeout=10)))
+        self.src = src
+        self.wait_runs(1)
+
+    def wait_runs(self, n, timeout=8):
+        deadline = time.time() + timeout
+        while time.time() < deadline and (not self.runs.exists() or self.runs.read_text().count("run") < n):
+            time.sleep(0.1)
+        return self.runs.read_text().count("run") if self.runs.exists() else 0
+
+    def log(self):
+        return (self.t / "home/.local/state/gdrive-sync/sync.log").read_text()
+
+    def test_download_mode_polls_without_inotify_and_wakes_on_now(self):
+        self.start("download")
+        time.sleep(0.5)
+        subprocess.run([str(self.src / "gdrive-status"), "now"], env=self.env, check=True)
+        self.assertEqual(self.wait_runs(2), 2)
+        self.assertFalse(self.inotify_calls.exists())
+        self.assertIn("300s", self.log())
+
+    def test_upload_mode_watches_with_a_long_poll(self):
+        self.start("upload")
+        deadline = time.time() + 5
+        while time.time() < deadline and not self.inotify_calls.exists():
+            time.sleep(0.1)
+        self.assertIn("-t 1800", self.inotify_calls.read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -92,7 +92,7 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 
 **Files:** Modify `sync/gdrive-syncd`, `sync/tests/test_sync.py`.
 
-- [ ] `MODE` from config/env: twoway unchanged; upload → inotify + `POLL` default 1800; download → no inotify, `POLL` 300, trigger polled every 5 s. Test: download mode with inotifywait on PATH still never invokes it (fake inotifywait logs calls); "now" trigger wakes it < 7 s. Commit.
+- [x] `MODE` from config/env: twoway unchanged; upload → inotify + `POLL` default 1800; download → no inotify, `POLL` 300, trigger polled every 5 s. Test: download mode with inotifywait on PATH still never invokes it (fake inotifywait logs calls); "now" trigger wakes it < 7 s. Commit.
 
 ### Task 5: `gdrive-setup` backend — short steps and service install
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Google Drive surekli iki yonlu senkron daemon'u.
-# Yerel degisiklikleri inotify ile aninda yakalar; uzak degisiklikler icin periyodik yoklar.
+# Google Drive surekli senkron daemon'u. Moda gore:
+#   twoway   yerel degisiklik inotify ile aninda, Drive 5 dk'da bir yoklanir
+#   upload   yerel degisiklik inotify ile aninda, guvenlik icin 30 dk'da bir tam tarama
+#   download inotify yok (yerel degisiklik onemsiz), Drive 5 dk'da bir yoklanir
 # "gdrive-status now" (widget'taki "Simdi senkronla") tetik dosyasina yazar; daemon hemen uyanir.
 set -uo pipefail
 
@@ -10,14 +12,21 @@ STATE="${GDRIVE_STATE:-$HOME/.local/state/gdrive-sync}"
 LOG="$STATE/sync.log"
 TRIGGER_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/gdrive-sync"
 TRIGGER="$TRIGGER_DIR/now"
-POLL="${GDRIVE_POLL:-300}"        # uzak tarafi kac saniyede bir yokla
+case "$MODE" in
+  upload) DEFAULT_POLL=1800 ;;
+  *) DEFAULT_POLL=300 ;;
+esac
+POLL="${GDRIVE_POLL:-$DEFAULT_POLL}"   # kac saniyede bir senkron calissin
 DEBOUNCE="${GDRIVE_DEBOUNCE:-15}" # yerel degisiklik sonrasi birikme suresi
 
 mkdir -p "$LOCAL" "$STATE" "$TRIGGER_DIR"
 log() { echo "$(date '+%F %T') [daemon] $*" >>"$LOG"; }
 
-if command -v inotifywait >/dev/null 2>&1; then
-  log "basladi (anlik: inotify acik, uzak yoklama ${POLL}s)"
+if [ "$MODE" = download ]; then
+  log "basladi (sadece indirme; ${POLL}s araliklarla)"
+  WATCH=0
+elif command -v inotifywait >/dev/null 2>&1; then
+  log "basladi ($MODE; anlik: inotify acik, yoklama ${POLL}s)"
   WATCH=1
 else
   log "basladi (inotify-tools yok; sadece ${POLL}s araliklarla)"
