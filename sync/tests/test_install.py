@@ -17,7 +17,7 @@ class InstallTest(unittest.TestCase):
         self.base = Path(self.tmp.name)
         self.source = self.base / 'script folder % test'
         self.source.mkdir()
-        for name in ('install.sh', 'gdrive-sync', 'gdrive-syncd', 'gdrive-status', 'gdrive-nfc', 'gdrive_common.py', 'gdrive-lib.sh'):
+        for name in ('install.sh', 'gdrive-sync', 'gdrive-syncd', 'gdrive-status', 'gdrive-nfc', 'gdrive_common.py', 'gdrive-lib.sh', 'gdrive-setup'):
             if (ROOT / name).exists():
                 shutil.copy(ROOT / name, self.source / name)
         self.bin = self.base / 'bin'
@@ -54,6 +54,9 @@ class InstallTest(unittest.TestCase):
         unit = self.home / '.config/systemd/user/gdrive-sync.service'
         content = unit.read_text()
         self.assertIn('script folder %% test/gdrive-syncd"', content)
+        config = (self.home / '.config/gdrive-sync/config').read_text()
+        self.assertIn('MODE=twoway\n', config)
+        self.assertIn('LEGACY=1\n', config)
         checked = subprocess.run(['systemd-analyze', '--user', 'verify', str(unit)],
                                  capture_output=True, text=True)
         self.assertEqual(checked.returncode, 0, checked.stderr)
@@ -70,6 +73,9 @@ class InstallTest(unittest.TestCase):
         self.assertEqual(link.resolve(), (self.source / 'gdrive-status').resolve())
 
     def test_existing_user_file_in_local_bin_is_not_overwritten(self):
+        state = self.home / '.local/state/gdrive-sync'
+        state.mkdir(parents=True)
+        (state / 'initialized').touch()
         bin_dir = self.home / '.local/bin'
         bin_dir.mkdir(parents=True)
         (bin_dir / 'gdrive-status').write_text('mine')
@@ -78,12 +84,12 @@ class InstallTest(unittest.TestCase):
         self.assertEqual((bin_dir / 'gdrive-status').read_text(), 'mine')
         self.assertIn('dokunulmadi', result.stderr)
 
-    def test_missing_remote_stops_before_service_install(self):
-        self.command('rclone', 'echo unrelated:')
+    def test_new_machine_without_terminal_points_to_gdrive_setup(self):
         result = self.run_install()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('gdrive', result.stderr)
+        self.assertIn('gdrive-setup', result.stderr)
         self.assertFalse((self.home / '.config/systemd/user/gdrive-sync.service').exists())
+        self.assertNotIn('enable', (self.base / 'calls').read_text())
 
 
 if __name__ == '__main__':

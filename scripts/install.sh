@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+scripts/bundle-sync.sh
+
 ID=$(sed -n 's/.*"Id": *"\([^"]*\)".*/\1/p' package/metadata.json)
 
 if [ -x scripts/i18n-build.sh ] && command -v msgfmt >/dev/null; then

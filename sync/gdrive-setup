@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""gdrive-setup: first-run setup for the gdrive-sync service (terminal wizard and widget backend).
+
+  gdrive-setup                      interactive wizard (in a terminal)
+  gdrive-setup <step> ... --json    one step, JSON on stdout (used by the Plasma widget)
+
+Steps:
+  check                             requirements (rclone >= 1.66, systemd, inotify-tools)
+  remotes                           Google Drive connections already in rclone
+  drive-folders REMOTE [PATH]       sub-folders of a Drive folder
+  check-local PATH                  can this local folder be used?
+  preview REMOTE PATH LOCAL         what is only on Drive / only here / different
+  connect NAME                      new Google login (detached; progress in setup.json)
+  apply REMOTE PATH LOCAL MODE FIRST
+                                    first sync + config + service (detached)
+  cancel                            stop a running connect/apply
+  disconnect [--delete-remote]      stop the service, keep files, back up the config
+  install-service [--dev] [--start] install scripts, commands and the systemd unit
+  migrate                           write the config for a 0.1.0 install (no sync)
+
+Standard library only. Binaries can be replaced for tests with GDRIVE_RCLONE,
+GDRIVE_SYSTEMCTL and GDRIVE_SYSTEMD_RUN.
+"""
+import datetime
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+import gdrive_common as gc  # noqa: E402
+
+SCRIPTS = ["gdrive-setup", "gdrive-sync", "gdrive-syncd", "gdrive-status", "gdrive-nfc",
+           "gdrive_common.py", "gdrive-lib.sh"]
+COMMANDS = ["gdrive-status", "gdrive-sync", "gdrive-setup", "gdrive-nfc"]
+EXECUTABLE = ["gdrive-setup", "gdrive-sync", "gdrive-syncd", "gdrive-status", "gdrive-nfc"]
+
+
+class StepError(Exception):
+    def __init__(self, code, message=""):
+        super().__init__(message or code)
+        self.code = code
+        self.message = message or code
+
+
+# ---------- helpers ----------
+
+def rclone(args, timeout=120, **kw):
+    exe = os.environ.get("GDRIVE_RCLONE") or "rclone"
+    try:
+        return subprocess.run([exe, *args], capture_output=True, text=True, timeout=timeout, **kw)
+    except FileNotFoundError:
+        raise StepError("rclone_missing", "rclone is not installed")
+    except subprocess.TimeoutExpired:
+        raise StepError("timeout", "rclone did not answer")
+
+
+def systemctl(*args):
+    exe = os.environ.get("GDRIVE_SYSTEMCTL") or "systemctl"
+    try:
+        return subprocess.run([exe, "--user", *args], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise StepError("systemd", str(e))
+
+
+def rclone_error(p):
+    text = (p.stderr or "") + (p.stdout or "")
+    if "invalid_grant" in text or "oauth2" in text:
+        return StepError("auth", "the Google login has expired")
+    if "didn't find section in config file" in text or "not found in config" in text:
+        return StepError("no_remote", "this connection does not exist")
+    if "no such host" in text or "dial tcp" in text or "network is unreachable" in text:
+        return StepError("offline", "Google Drive could not be reached")
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+    return StepError("rclone", lines[-1] if lines else "rclone failed")
+
+
+def norm_path(path):
+    return os.path.normpath(os.path.abspath(os.path.expanduser(path)))
+
+
+def inside(path, parent):
+    """path is parent or below it."""
+    return path == parent or path.startswith(parent.rstrip("/") + "/")
+
+
+def target_of(remote, remote_path):
+    return remote + remote_path.strip("/")
+
+
+def load_setup():
+    try:
+        with open(gc.paths()["setupJson"], encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+# ---------- short steps ----------
+
+def step_check():
+    return gc.checks()
+
+
+def step_remotes():
+    p = rclone(["listremotes", "--long"], timeout=30)
+    remotes, names = [], set()
+    for line in p.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].endswith(":"):
+            names.add(parts[0])
+            if parts[1] == "drive":
+                remotes.append({"name": parts[0]})
+    suggest = "gdrive:"
+    n = 1
+    while suggest in names:
+        suggest = f"gdrive-sync-{n}:"
+        n += 1
+    return {"remotes": remotes, "suggestName": suggest}
+
+
+def step_drive_folders(remote, path=""):
+    p = rclone(["lsf", target_of(remote, path), "--dirs-only", "--max-depth", "1"], timeout=60)
+    if p.returncode != 0:
+        raise rclone_error(p)
+    folders = [l.rstrip("/") for l in p.stdout.splitlines() if l.strip()]
+    return {"folders": sorted(folders, key=str.casefold)}
+
+
+def step_check_local(path):
+    path = norm_path(path)
+    p = gc.paths()
+    home = norm_path(p["home"])
+    current = gc.effective()
+    reason = None
+    if path == "/":
+        reason = "root"
+    elif inside(home, path):
+        reason = "home"
+    elif os.path.exists(path) and not os.path.isdir(path):
+        reason = "file"
+    elif any(inside(path, norm_path(d)) or inside(norm_path(d), path) for d in (p["state"], p["share"])):
+        reason = "state"
+    elif current and path != norm_path(current["local"]) and (
+            inside(path, norm_path(current["local"])) or inside(norm_path(current["local"]), path)):
+        reason = "nested"
+    exists = os.path.isdir(path)
+    empty = not exists or not os.listdir(path)
+    setup = load_setup() or {}
+    ours_paths = {norm_path(x) for x in [((setup.get("target") or {}).get("local")),
+                                         current and current["local"]] if x}
+    return {"ok": reason is None, "reason": reason, "path": path, "exists": exists,
+            "empty": empty, "ours": path in ours_paths}
+
+
+def step_preview(remote, remote_path, local):
+    local = norm_path(local)
+    counts = {"same": 0, "onlyDrive": 0, "onlyLocal": 0, "different": 0}
+    if not os.path.isdir(local) or not os.listdir(local):
+        return dict(counts, empty=True, needsChoice=False)
+    args = ["check", target_of(remote, remote_path), local, "--combined", "-",
+            "--drive-skip-gdocs", "--checkers", "16"]
+    filters = gc.paths()["filters"]
+    if os.path.exists(filters):
+        args += ["--filters-file", filters]
+    p = rclone(args, timeout=3600)
+    keys = {"=": "same", "-": "onlyDrive", "+": "onlyLocal", "*": "different"}
+    for line in p.stdout.splitlines():
+        key = keys.get(line[:2].strip()) if line[1:2] == " " else None
+        if key:
+            counts[key] += 1
+    if p.returncode not in (0, 1) or (p.returncode == 1 and not any(counts.values())):
+        raise rclone_error(p)
+    ours = step_check_local(local)["ours"]
+    return dict(counts, empty=False,
+                needsChoice=not ours and (counts["onlyLocal"] + counts["different"]) > 0)
+
+
+def step_migrate():
+    return {"migrated": gc.migrate_if_legacy()}
+
+
+# ---------- service install ----------
+
+def unit_text(exec_path):
+    if "\n" in exec_path or "\r" in exec_path:
+        raise StepError("bad_path", "the script folder path contains a line break")
+    # systemd interprets % and $ even inside quotes
+    escaped = (exec_path.replace("\\", "\\\\").replace('"', '\\"')
+               .replace("%", "%%").replace("$", "$$"))
+    return f"""[Unit]
+Description=Google Drive sync (gdrive-sync, rclone)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart="{escaped}"
+Restart=always
+RestartSec=30
+Nice=10
+IOSchedulingClass=idle
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
+"""
+
+
+def install_service(dev=False, start=False):
+    p = gc.paths()
+    if dev:
+        bin_dir = HERE
+    else:
+        bin_dir = p["bin"]
+        os.makedirs(bin_dir, exist_ok=True)
+        if os.path.realpath(bin_dir) != os.path.realpath(HERE):
+            for name in SCRIPTS:
+                src = os.path.join(HERE, name)
+                if os.path.exists(src):
+                    tmp = os.path.join(bin_dir, f".{name}.tmp")
+                    shutil.copyfile(src, tmp)
+                    os.replace(tmp, os.path.join(bin_dir, name))
+    for name in EXECUTABLE:
+        f = os.path.join(bin_dir, name)
+        if os.path.exists(f):
+            os.chmod(f, 0o755)
+
+    skipped = []
+    os.makedirs(p["localBin"], exist_ok=True)
+    for cmd in COMMANDS:
+        link = os.path.join(p["localBin"], cmd)
+        target = os.path.join(bin_dir, cmd)
+        if not os.path.exists(target):
+            continue
+        if os.path.lexists(link) and not os.path.islink(link):
+            skipped.append(link)  # the user's own file: never overwritten
+            continue
+        tmp = link + ".tmp-gdrive"
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        os.symlink(target, tmp)
+        os.replace(tmp, link)
+
+    text = unit_text(os.path.join(bin_dir, "gdrive-syncd"))
+    try:
+        with open(p["unit"], encoding="utf-8") as f:
+            old = f.read()
+    except OSError:
+        old = None
+    changed = old != text
+    if changed:
+        if old is not None:
+            shutil.copyfile(p["unit"], p["unit"] + ".bak")
+        gc.atomic_write(p["unit"], text)
+    systemctl("daemon-reload")
+    # keeps the service running across logouts and starts it at boot; best effort, no sudo
+    try:
+        subprocess.run(["loginctl", "enable-linger"], capture_output=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    if start:
+        service = os.path.basename(p["unit"])
+        if changed and systemctl("is-active", "--quiet", service).returncode == 0:
+            systemctl("restart", service)
+        r = systemctl("enable", "--now", service)
+        if r.returncode != 0:
+            raise StepError("systemd", (r.stderr or "").strip() or "the service did not start")
+    return {"ok": True, "binDir": bin_dir, "unit": p["unit"], "changed": changed,
+            "skippedLinks": skipped}
+
+
+# ---------- command line ----------
+
+def run_step(name, args, flags):
+    if name == "check":
+        return step_check()
+    if name == "remotes":
+        return step_remotes()
+    if name == "drive-folders" and 1 <= len(args) <= 2:
+        return step_drive_folders(*args)
+    if name == "check-local" and len(args) == 1:
+        return step_check_local(args[0])
+    if name == "preview" and len(args) == 3:
+        return step_preview(*args)
+    if name == "migrate":
+        return step_migrate()
+    if name == "install-service":
+        return install_service(dev="--dev" in flags or os.environ.get("GDRIVE_DEV") == "1",
+                               start="--start" in flags)
+    return None
+
+
+def main(argv):
+    flags = {a for a in argv[1:] if a.startswith("--")}
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    if not args:
+        print(__doc__, file=sys.stderr)
+        return 2
+    try:
+        result = run_step(args[0], args[1:], flags)
+    except StepError as e:
+        result = {"ok": False, "error": e.code, "message": e.message}
+    if result is None:
+        print(__doc__, file=sys.stderr)
+        return 2
+    if "--json" in flags:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

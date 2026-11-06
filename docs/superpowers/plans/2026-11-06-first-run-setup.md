@@ -107,9 +107,9 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 - `install-service [--dev]`: non-dev copies `sync/` scripts into `share/bin` (realpath of own dir is the source); dev leaves them; links `gdrive-status gdrive-sync gdrive-setup gdrive-nfc` into `~/.local/bin` (never over a non-symlink); writes the unit (escaping as today's `install.sh`), `daemon-reload`, best-effort `loginctl enable-linger`; does **not** enable/start.
 - `GDRIVE_SYSTEMCTL`, `GDRIVE_SYSTEMD_RUN`, `GDRIVE_RCLONE` override the binaries (tests).
 
-- [ ] Tests with fake rclone/systemctl in temp HOME: each step's JSON; `check-local` refuses `$HOME`, `/`, a path inside current `LOCAL`, a file; `preview` counts from a canned `--combined` output (incl. names with spaces); `install-service` unit escaping for a path with `%` and `$`; link not overwritten when a regular file exists.
-- [ ] Implement. `sync/install.sh` → dev mode: checks systemd/flock, `gdrive-setup install-service --dev`, then if `effective()` is None runs `gdrive-setup` (interactive, Task 7) else `enable --now`/restart as today; no sudo, no `rclone config`. Update `test_install.py`.
-- [ ] `scripts/package.sh` and `scripts/install.sh` copy `sync/{gdrive-*,gdrive_common.py}` into `package/contents/code/sync/`; `.gitignore` it. Tests pass. Commit "gdrive-setup: checks, folders, preview, service install".
+- [x] Tests with fake rclone/systemctl in temp HOME: each step's JSON; `check-local` refuses `$HOME`, `/`, a path inside current `LOCAL`, a file; `preview` counts from a canned `--combined` output (incl. names with spaces); `install-service` unit escaping for a path with `%` and `$`; link not overwritten when a regular file exists.
+- [x] Implement. `sync/install.sh` → dev mode: checks systemd/flock, `gdrive-setup install-service --dev`, then if `effective()` is None runs `gdrive-setup` (interactive, Task 7) else `enable --now`/restart as today; no sudo, no `rclone config`. Update `test_install.py`.
+- [x] `scripts/package.sh` and `scripts/install.sh` copy `sync/{gdrive-*,gdrive_common.py}` into `package/contents/code/sync/`; `.gitignore` it. Tests pass. Commit "gdrive-setup: checks, folders, preview, service install".
 
 ### Task 6: Detached connect / apply, cancel, disconnect
 
