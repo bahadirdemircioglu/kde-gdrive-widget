@@ -2,13 +2,12 @@
 # Google Drive <-> ~/GoogleDrive iki yonlu senkron (rclone bisync)
 set -uo pipefail
 
-REMOTE="${GDRIVE_REMOTE:-gdrive:}"           # rclone config'de verdigin uzak ad
-LOCAL="${GDRIVE_LOCAL:-$HOME/GoogleDrive}"
-STATE="$HOME/.local/state/gdrive-sync"
+. "$(dirname "$(readlink -f "$0")")/gdrive-lib.sh"   # REMOTE, LOCAL, MODE, CONF_DIR
+STATE="${GDRIVE_STATE:-$HOME/.local/state/gdrive-sync}"
 LOG="$STATE/sync.log"
 LOCK="$STATE/lock"
 FAILS="$STATE/ardisik_hata"
-FILTERS="$HOME/.config/gdrive-sync/filters.txt"   # degisirse bir kez --resync gerekir
+FILTERS="$CONF_DIR/filters.txt"   # degisirse bir kez --resync gerekir
 
 mkdir -p "$LOCAL" "$STATE" "$(dirname "$FILTERS")"
 [ -f "$FILTERS" ] || printf '%s\n' '# gdrive-sync haric tutma kurallari (yeniden uretilebilir icerik)' \
@@ -38,7 +37,10 @@ fail() {
 # "gdrive-sync --resync": temel durumu sifirdan kurar.
 # DIKKAT: resync iki tarafi BIRLESTIRIR; taraflar farkli duzenlenmisse dosyalar
 # hem eski hem yeni yerde kalir. Sadece iki taraf ayniyken (ya da filtre degisince) kullan.
-[ "${1:-}" = "--resync" ] && rm -f "$STATE/initialized"
+# Temel durum (initialized) yoksa senkron KENDILIGINDEN --resync yapmaz: ilk senkronu
+# gdrive-setup yapar (bos klasor / onizleme kurallariyla). Elle "--resync" yazmak gerekir.
+RESYNC=0
+[ "${1:-}" = "--resync" ] && RESYNC=1
 
 # Ayni anda iki senkron calismasin
 exec 9>"$LOCK"
@@ -67,13 +69,16 @@ ARGS=(
 
 # Ilk calistirmada temel durumun olusturulmasi gerekir
 status begin
-if [ ! -f "$STATE/initialized" ]; then
-  echo "$(date '+%F %T') === ILK SENKRON (--resync) ===" >>"$LOG"
+if [ "$RESYNC" = 1 ]; then
+  echo "$(date '+%F %T') === ELLE ISTENEN --resync ===" >>"$LOG"
   if rclone bisync "$LOCAL" "$REMOTE" --resync "${ARGS[@]}"; then
     touch "$STATE/initialized"
   else
-    fail "Ilk senkron (--resync) BASARISIZ"
+    fail "--resync BASARISIZ"
   fi
+elif [ ! -f "$STATE/initialized" ]; then
+  echo "$(date '+%F %T') ERROR : bisync baseline not initialized; run gdrive-setup" >>"$LOG"
+  fail "Senkron kurulumu tamamlanmamis (temel durum yok). gdrive-setup calistirin"
 else
   echo "$(date '+%F %T') === senkron ===" >>"$LOG"
   rclone bisync "$LOCAL" "$REMOTE" "${ARGS[@]}" || \

@@ -4,9 +4,9 @@
 # "gdrive-status now" (widget'taki "Simdi senkronla") tetik dosyasina yazar; daemon hemen uyanir.
 set -uo pipefail
 
-LOCAL="${GDRIVE_LOCAL:-$HOME/GoogleDrive}"
+. "$(dirname "$(readlink -f "$0")")/gdrive-lib.sh"   # LOCAL, MODE
 SYNC="$(dirname "$(readlink -f "$0")")/gdrive-sync"
-STATE="$HOME/.local/state/gdrive-sync"
+STATE="${GDRIVE_STATE:-$HOME/.local/state/gdrive-sync}"
 LOG="$STATE/sync.log"
 TRIGGER_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/gdrive-sync"
 TRIGGER="$TRIGGER_DIR/now"

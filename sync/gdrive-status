@@ -20,6 +20,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import gdrive_common as gc  # noqa: E402
+
 RECENT_MAX = 50
 CURRENT_MAX = 20
 ERROR_LINES = 4
@@ -41,6 +44,7 @@ ERROR_CODES = [  # first match wins
     ("too many deletes", "too_many_deletes"),
     ("insufficientFilePermissions", "permission"),
     ("invalid_grant", "auth"),
+    ("not initialized", "not_initialized"),
 ]
 
 
@@ -49,7 +53,8 @@ def env(name, default):
 
 
 HOME = os.path.expanduser("~")
-LOCAL = env("GDRIVE_LOCAL", os.path.join(HOME, "GoogleDrive")).rstrip("/")
+SETTINGS = gc.effective()
+LOCAL = env("GDRIVE_LOCAL", (SETTINGS or {}).get("local") or os.path.join(HOME, "GoogleDrive")).rstrip("/")
 STATE = env("GDRIVE_STATE", os.path.join(HOME, ".local/state/gdrive-sync"))
 BISYNC_DIR = env("GDRIVE_BISYNC_DIR", os.path.join(HOME, ".cache/rclone/bisync"))
 SERVICE = env("GDRIVE_SERVICE", "gdrive-sync.service")
@@ -213,7 +218,24 @@ def cmd_end(result):
     save_status(st)
 
 
+def load_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
 def cmd_show():
+    paths = gc.paths()
+    if not os.path.exists(paths["config"]):
+        gc.migrate_if_legacy()
+        if gc.effective() is None:
+            print(json.dumps({"state": "unconfigured", "checks": gc.checks(),
+                              "setup": load_json(paths["setupJson"]),
+                              "serviceActive": service_active()}, ensure_ascii=False))
+            return
     st = load_status()
     active = service_active()
     out = dict(st) if st.get("state") else {"state": "missing"}

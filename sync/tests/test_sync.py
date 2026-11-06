@@ -24,16 +24,18 @@ class SyncStatusTest(unittest.TestCase):
         self.state = self.home / ".local/state/gdrive-sync"
         self.src = t / "sync"
         self.src.mkdir()
-        for name in ("gdrive-sync", "gdrive-status"):
+        for name in ("gdrive-sync", "gdrive-status", "gdrive_common.py", "gdrive-lib.sh"):
             shutil.copy(ROOT / name, self.src / name)
         self.bin = t / "bin"
         self.bin.mkdir()
-        self.fake("rclone", """
-[ "$1" = lsd ] && exit "${LSD_EXIT:-0}"
+        self.calls = t / "rclone_calls"
+        self.fake("rclone", f"""
+printf '%s|' "$@" >> "{self.calls}"; echo >> "{self.calls}"
+[ "$1" = lsd ] && exit "${{LSD_EXIT:-0}}"
 for a; do case "$prev" in --log-file) log="$a";; esac; prev="$a"; done
-[ -n "${BISYNC_LINE:-}" ] && echo "$BISYNC_LINE" >> "$log"
-[ "${RC_EXIT:-0}" = 0 ] && echo "x INFO  : Bisync successful" >> "$log" || echo "x ERROR : Bisync critical error: path1 and path2 are out of sync" >> "$log"
-exit "${RC_EXIT:-0}"
+[ -n "${{BISYNC_LINE:-}}" ] && echo "$BISYNC_LINE" >> "$log"
+[ "${{RC_EXIT:-0}}" = 0 ] && echo "x INFO  : Bisync successful" >> "$log" || echo "x ERROR : Bisync critical error: path1 and path2 are out of sync" >> "$log"
+exit "${{RC_EXIT:-0}}"
 """)
         self.fake("notify-send", "exit 0")
         self.fake("systemctl", "exit 0")
@@ -77,6 +79,42 @@ exit "${RC_EXIT:-0}"
         self.assertEqual(st["state"], "offline")
         self.assertEqual(len(st["recent"]), 1)
 
+    def rclone_calls(self):
+        return self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def test_missing_baseline_never_resyncs_on_its_own(self):
+        (self.state / "initialized").unlink()
+        self.assertEqual(self.sync().returncode, 1)
+        self.assertFalse([c for c in self.rclone_calls() if c.startswith("bisync|")])
+        self.assertEqual(self.status()["lastError"]["code"], "not_initialized")
+
+    def test_explicit_resync_still_works(self):
+        (self.state / "initialized").unlink()
+        p = subprocess.run([str(self.src / "gdrive-sync"), "--resync"], env=self.env,
+                           capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(any("|--resync|" in c for c in self.rclone_calls()))
+        self.assertTrue((self.state / "initialized").exists())
+
+    def test_config_file_is_honoured_and_never_executed(self):
+        cfg = self.home / ".config/gdrive-sync/config"
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        local = self.home / "My Drive Ş"
+        cfg.write_text(f"REMOTE=work:\nREMOTE_PATH=Belgeler/2026\nLOCAL={local}\n"
+                       "MODE=twoway\nVERSION=1\nEVIL=$(touch /tmp/gdrive-pwned)\n")
+        self.assertEqual(self.sync().returncode, 0)
+        bisync = [c for c in self.rclone_calls() if c.startswith("bisync|")][0].split("|")
+        self.assertEqual(bisync[1:3], [str(local), "work:Belgeler/2026"])
+        self.assertTrue(local.is_dir())
+
+    def test_env_overrides_config(self):
+        cfg = self.home / ".config/gdrive-sync/config"
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        cfg.write_text(f"REMOTE=work:\nLOCAL={self.home}/a\nMODE=twoway\nVERSION=1\n")
+        self.sync(GDRIVE_LOCAL=str(self.home / "b"), GDRIVE_REMOTE="other:")
+        bisync = [c for c in self.rclone_calls() if c.startswith("bisync|")][0].split("|")
+        self.assertEqual(bisync[1:3], [str(self.home / "b"), "other:"])
+
     def test_missing_helper_never_breaks_the_sync(self):
         (self.src / "gdrive-status").unlink()
         self.assertEqual(self.sync().returncode, 0)
@@ -91,6 +129,8 @@ class DaemonTriggerTest(unittest.TestCase):
             src.mkdir()
             shutil.copy(ROOT / "gdrive-syncd", src / "gdrive-syncd")
             shutil.copy(ROOT / "gdrive-status", src / "gdrive-status")
+            shutil.copy(ROOT / "gdrive_common.py", src / "gdrive_common.py")
+            shutil.copy(ROOT / "gdrive-lib.sh", src / "gdrive-lib.sh")
             runs = t / "runs"
             (src / "gdrive-sync").write_text(f'#!/bin/bash\necho run >> "{runs}"\n')
             (src / "gdrive-sync").chmod(0o755)

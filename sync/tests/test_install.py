@@ -17,7 +17,7 @@ class InstallTest(unittest.TestCase):
         self.base = Path(self.tmp.name)
         self.source = self.base / 'script folder % test'
         self.source.mkdir()
-        for name in ('install.sh', 'gdrive-sync', 'gdrive-syncd', 'gdrive-status', 'gdrive-nfc'):
+        for name in ('install.sh', 'gdrive-sync', 'gdrive-syncd', 'gdrive-status', 'gdrive-nfc', 'gdrive_common.py', 'gdrive-lib.sh'):
             if (ROOT / name).exists():
                 shutil.copy(ROOT / name, self.source / name)
         self.bin = self.base / 'bin'

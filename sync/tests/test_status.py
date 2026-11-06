@@ -90,8 +90,8 @@ class ClassifyTest(unittest.TestCase):
                 self.assertEqual(gs.classify(text), code)
 
 
-class CliTest(unittest.TestCase):
-    """begin/end/show round trips against a temp HOME with a fake systemctl."""
+class CliBase(unittest.TestCase):
+    """Temp HOME with a config and a fake systemctl."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -113,7 +113,12 @@ class CliTest(unittest.TestCase):
                         f'[ -f "{self.svc}" ] && {{ echo active; exit 0; }} || {{ echo inactive; exit 3; }};; esac\n'
                         "exit 0\n")
         fake.chmod(0o755)
+        self.home = t / "home"
+        (self.home / ".config/gdrive-sync").mkdir(parents=True)
+        (self.home / ".config/gdrive-sync/config").write_text(
+            "REMOTE=gdrive:\nLOCAL=/home/u/GoogleDrive\nMODE=twoway\nVERSION=1\n")
         self.env = dict(os.environ,
+                        HOME=str(self.home), PATH=f"{self.bin}:/usr/bin:/bin",
                         GDRIVE_LOCAL="/home/u/GoogleDrive",
                         GDRIVE_STATE=str(self.state),
                         GDRIVE_BISYNC_DIR=str(self.bisync),
@@ -135,6 +140,10 @@ class CliTest(unittest.TestCase):
 
     def show(self):
         return json.loads(self.cli("show"))
+
+
+class CliTest(CliBase):
+    """begin/end/show round trips."""
 
     def test_missing_status_shows_missing(self):
         s = self.show()
@@ -239,6 +248,47 @@ class CliTest(unittest.TestCase):
         calls = (pathlib.Path(self.tmp.name) / "systemctl_calls").read_text()
         self.assertIn("--user stop gdrive-sync.service", calls)
         self.assertIn("--user start gdrive-sync.service", calls)
+
+
+class SetupStateTest(CliBase):
+    """No config: legacy installs are migrated silently, new machines report 'unconfigured'."""
+
+    def setUp(self):
+        super().setUp()
+        (self.home / ".config/gdrive-sync/config").unlink()
+        self.env.pop("GDRIVE_LOCAL")
+        self.env["GDRIVE_STATE"] = str(self.home / ".local/state/gdrive-sync")
+        self.state = pathlib.Path(self.env["GDRIVE_STATE"])
+        self.state.mkdir(parents=True)
+
+    def test_new_machine_is_unconfigured_with_checks(self):
+        s = self.show()
+        self.assertEqual(s["state"], "unconfigured")
+        self.assertIn("rcloneOk", s["checks"])
+        self.assertIsNone(s["setup"])
+        self.assertFalse((self.home / ".config/gdrive-sync/config").exists())
+
+    def test_legacy_install_is_migrated_without_a_sync(self):
+        unit = self.home / ".config/systemd/user/gdrive-sync.service"
+        unit.parent.mkdir(parents=True)
+        unit.write_text("[Service]\n")
+        (self.state / "initialized").touch()
+        (self.state / "status.json").write_text('{"state": "synced"}')
+        s = self.show()
+        self.assertEqual(s["state"], "synced")
+        cfg = (self.home / ".config/gdrive-sync/config").read_text()
+        self.assertIn("MODE=twoway\n", cfg)
+        self.assertIn(f"LOCAL={self.home}/GoogleDrive\n", cfg)
+        self.assertIn("LEGACY=1\n", cfg)
+        calls = pathlib.Path(self.tmp.name) / "systemctl_calls"
+        self.assertNotIn("start", calls.read_text() if calls.exists() else "")
+
+    def test_setup_json_is_passed_through_and_garbage_is_null(self):
+        (self.state / "setup.json").write_text('{"step": "connect", "state": "running"}')
+        self.assertEqual(self.show()["setup"]["step"], "connect")
+        (self.state / "setup.json").write_text('{"step": "conn')
+        self.assertIsNone(self.show()["setup"])
+
 
 
 if __name__ == "__main__":

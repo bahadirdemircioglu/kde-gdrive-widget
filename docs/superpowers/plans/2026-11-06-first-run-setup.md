@@ -38,7 +38,7 @@
 
 ### Task 0: Worktree
 
-- [ ] `git worktree add ../gdrive_widget-setup -b first-run-setup` (superpowers:using-git-worktrees); all work below happens there. Baseline: `python3 -m unittest discover -s sync/tests` (27 pass) and `npm test` (14 pass).
+- [x] `git worktree add ../gdrive_widget-setup -b first-run-setup` (superpowers:using-git-worktrees); all work below happens there. Baseline: `python3 -m unittest discover -s sync/tests` (27 pass) and `npm test` (14 pass).
 
 ### Task 1: Config, migration, no automatic resync
 
@@ -52,11 +52,11 @@
 - `migrate_if_legacy(env) -> bool` — writes the config from `detect_legacy`; never runs rclone.
 - `checks(env) -> dict` → `{rclone: bool, rcloneVersion: str|None, rcloneOk: bool, python: True, systemd: bool, inotify: bool, pkgManager: str|None, installCommand: str|None}`; version from first line of `rclone version`; `installCommand` e.g. `sudo pacman -S --needed rclone inotify-tools` listing only missing packages (pacman/apt/dnf/zypper).
 
-- [ ] Tests `test_common.py`: config round trip incl. spaces/Turkish chars in `LOCAL` and `REMOTE_PATH`; garbled file → `{}`; env override wins; `effective` builds `target` (`gdrive:` + `A/B` → `gdrive:A/B`, empty path → `gdrive:`); legacy detected only with unit **and** `initialized`; `migrate_if_legacy` twice → one write, second returns False; `checks` with fake `rclone version` printing `rclone v1.65.0` → `rcloneOk False`, `v1.75.2` → True; missing rclone + pacman present → `installCommand` contains `rclone`.
-- [ ] Run → fail. Implement `gdrive_common.py`. Run → pass.
-- [ ] `gdrive-status`: read `LOCAL` (and later `MODE`) from `effective()`; `cmd_show`: if config missing → `migrate_if_legacy`; still unconfigured → print `{"state":"unconfigured","checks":checks(),"setup":<setup.json or null>, "serviceActive":…}`. Tests in `test_status.py`: temp HOME with unit + initialized → `show` writes config with `MODE=twoway` and state is not `unconfigured`; no unit → `unconfigured` with `checks`.
-- [ ] `gdrive-sync`: read config with a `while IFS='=' read -r k v` loop accepting only `REMOTE REMOTE_PATH LOCAL MODE`; env still wins. Remove automatic first resync: if `initialized` missing and no `--resync` arg → `fail "not initialized: run gdrive-setup"`. `gdrive-status classify`: add `("not initialized", "not_initialized")`. Tests in `test_sync.py`: no `initialized` → exit 1, fake rclone log shows **no** `bisync` call, status error code `not_initialized`; `--resync` still runs `bisync --resync`; config `LOCAL=/x y` honoured.
-- [ ] All Python tests pass. Commit "Config file, legacy migration, no automatic resync".
+- [x] Tests `test_common.py`: config round trip incl. spaces/Turkish chars in `LOCAL` and `REMOTE_PATH`; garbled file → `{}`; env override wins; `effective` builds `target` (`gdrive:` + `A/B` → `gdrive:A/B`, empty path → `gdrive:`); legacy detected only with unit **and** `initialized`; `migrate_if_legacy` twice → one write, second returns False; `checks` with fake `rclone version` printing `rclone v1.65.0` → `rcloneOk False`, `v1.75.2` → True; missing rclone + pacman present → `installCommand` contains `rclone`.
+- [x] Run → fail. Implement `gdrive_common.py`. Run → pass.
+- [x] `gdrive-status`: read `LOCAL` (and later `MODE`) from `effective()`; `cmd_show`: if config missing → `migrate_if_legacy`; still unconfigured → print `{"state":"unconfigured","checks":checks(),"setup":<setup.json or null>, "serviceActive":…}`. Tests in `test_status.py`: temp HOME with unit + initialized → `show` writes config with `MODE=twoway` and state is not `unconfigured`; no unit → `unconfigured` with `checks`.
+- [x] `gdrive-sync`: read config with a `while IFS='=' read -r k v` loop accepting only `REMOTE REMOTE_PATH LOCAL MODE`; env still wins. Remove automatic first resync: if `initialized` missing and no `--resync` arg → `fail "not initialized: run gdrive-setup"`. `gdrive-status classify`: add `("not initialized", "not_initialized")`. Tests in `test_sync.py`: no `initialized` → exit 1, fake rclone log shows **no** `bisync` call, status error code `not_initialized`; `--resync` still runs `bisync --resync`; config `LOCAL=/x y` honoured.
+- [x] All Python tests pass. Commit "Config file, legacy migration, no automatic resync".
 
 ### Task 2: Verify Google docs, conflicts and copy logs on a scratch Drive folder (real account)
 
