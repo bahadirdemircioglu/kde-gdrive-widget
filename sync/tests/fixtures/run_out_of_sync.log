@@ -1,0 +1,74 @@
+2026-11-06 10:02:40 === senkron ===
+2026/11/06 10:02:41 INFO  : Setting --ignore-listing-checksum as neither --checksum nor --compare checksum are set.
+2026/11/06 10:02:41 INFO  : Bisyncing with Comparison Settings: 
+{
+	"Modtime": true,
+	"Size": true,
+	"Checksum": false,
+	"HashType1": 0,
+	"HashType2": 0,
+	"NoSlowHash": false,
+	"SlowHashSyncOnly": false,
+	"SlowHashDetected": true,
+	"DownloadHash": false
+}
+2026/11/06 10:02:41 INFO  : lock file renewed for 5m0s. New expiration: 2026-11-06 10:07:41.058875676 +0300 +03 m=+300.451474983
+2026/11/06 10:02:41 INFO  : Synching Path1 "/home/user/GoogleDrive/" with Path2 "gdrive{AB12C}:/"
+2026/11/06 10:02:41 INFO  : Using filters file /home/user/.config/gdrive-sync/filters.txt
+2026/11/06 10:02:41 NOTICE: Listings not found. Reverting to prior backup as --recover is set. 
+Path1: /home/user/.cache/rclone/bisync/home_user_GoogleDrive..gdrive_.path1.lst
+Path2: /home/user/.cache/rclone/bisync/home_user_GoogleDrive..gdrive_.path2.lst
+2026/11/06 10:02:41 INFO  : Validating backup listings for Path1 "/home/user/GoogleDrive/" vs Path2 "gdrive{AB12C}:/"
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 1/Belge 1.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 2/Belge 2.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 3/Belge 3.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 0/Belge 4.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 1/Belge 5.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 2/Belge 6.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 3/Belge 7.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 0/Belge 8.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 1/Belge 9.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 2/Belge 10.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 3/Belge 11.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 0/Belge 12.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 1/Belge 13.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 2/Belge 14.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 3/Belge 15.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 0/Belge 16.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 1/Belge 17.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 2/Belge 18.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 3/Belge 19.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 0/Belge 20.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 1/Belge 21.pdf
+2026/11/06 10:02:41 ERROR : -                   Path1 file not found in Path2               - Klasör 2/Belge 22.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 3/Belge 23.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 0/Belge 24.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 1/Belge 25.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 2/Belge 26.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 3/Belge 27.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 0/Belge 28.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 1/Belge 29.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 2/Belge 30.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 3/Belge 31.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 0/Belge 32.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 1/Belge 33.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 2/Belge 34.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 3/Belge 35.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 0/Belge 36.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 1/Belge 37.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 2/Belge 38.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 3/Belge 39.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 0/Belge 40.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 1/Belge 41.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 2/Belge 42.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 3/Belge 43.pdf
+2026/11/06 10:02:41 ERROR : -                   Path2 file not found in Path1               - Klasör 0/Belge 44.pdf
+2026/11/06 10:02:41 ERROR : Bisync critical error: path1 and path2 are out of sync, run --resync to recover
+2026/11/06 10:02:41 ERROR : Bisync aborted. Error is retryable without --resync due to --resilient mode.
+2026/11/06 10:02:41 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Errors:                 1 (fatal error encountered)
+Elapsed time:         0.0s
+
+2026/11/06 10:02:41 NOTICE: Failed to bisync: bisync aborted
+2026-11-06 10:02:41 Senkron hatasi. --resync calistirmadan once log'u incele (iki tarafi birlestirir) (ardisik hata: 3)

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <!-- Widget language: "" (follow the system) or a language code such as "en", "tr" -->
+    <entry name="language" type="String">
+      <default></default>
+    </entry>
+    <!-- How many recent changes the list shows -->
+    <entry name="recentCount" type="Int">
+      <default>7</default>
+      <min>3</min>
+      <max>30</max>
+    </entry>
+    <!-- On the desktop: "standard" | "translucent" | "none" -->
+    <entry name="desktopBackground" type="String">
+      <default>standard</default>
+    </entry>
+    <!-- Shell command that runs the status helper; the action (show, now, pause, resume) is appended.
+         plasmashell's PATH usually lacks ~/.local/bin, hence the full path. -->
+    <entry name="helperCommand" type="String">
+      <default>"$HOME/.local/bin/gdrive-status"</default>
+    </entry>
+  </group>
+</kcfg>

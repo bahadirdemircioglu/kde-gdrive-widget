@@ -1,0 +1,24 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Bahadir Demircioglu"
+            }
+        ],
+        "Category": "Online Services",
+        "Description": "Status of your rclone bisync Google Drive folder: sync state, recent changes, sync now and pause (unofficial)",
+        "Description[tr]": "rclone bisync ile senkronlanan Google Drive klasörünüzün durumu: senkron durumu, son değişiklikler, şimdi senkronla ve duraklat (resmi değil)",
+        "FormFactors": [
+            "desktop",
+            "panel"
+        ],
+        "Icon": "folder-cloud",
+        "Id": "io.github.bahadirdemircioglu.gdrivesync",
+        "License": "GPL-3.0-or-later",
+        "Name": "Google Drive Sync",
+        "Name[tr]": "Google Drive Senkronu",
+        "Version": "0.1.0"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

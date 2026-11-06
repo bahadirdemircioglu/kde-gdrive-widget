@@ -1,0 +1,313 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the plasma_applet_io.github.bahadirdemircioglu.gdrivesync package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: plasma_applet_io.github.bahadirdemircioglu.gdrivesync "
+"0.1.0\n"
+"Report-Msgid-Bugs-To: https://github.com/bahadirdemircioglu/gdrive-sync-"
+"plasma/issues\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+msgid "%1 day ago"
+msgid_plural "%1 days ago"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%1 hour ago"
+msgid_plural "%1 hours ago"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%1 min ago"
+msgid_plural "%1 min ago"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%2 of %1 file transferred"
+msgid_plural "%2 of %1 files transferred"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "A previous sync was interrupted"
+msgstr ""
+
+msgid ""
+"After an interrupted sync rclone could not verify its saved file lists. Your "
+"files are safe; syncing is on hold."
+msgstr ""
+
+msgid ""
+"Compare both sides; only if they are identical run the command below. Never "
+"resync while they differ."
+msgstr ""
+
+msgctxt "sync step"
+msgid "Comparing"
+msgstr ""
+
+msgid "Configure…"
+msgstr ""
+
+msgid "Copy"
+msgstr ""
+
+msgid "Desktop background:"
+msgstr ""
+
+msgid "Details"
+msgstr ""
+
+msgid ""
+"Don't delete those files on this computer; remove them on drive.google.com "
+"or ask their owner."
+msgstr ""
+
+msgid "Downloaded today"
+msgstr ""
+
+msgid "Drive"
+msgstr ""
+
+msgid "Files"
+msgstr ""
+
+msgid "General"
+msgstr ""
+
+msgid "Google Drive"
+msgstr ""
+
+msgid ""
+"Google Drive refused a change (403), usually for files owned by someone else."
+msgstr ""
+
+msgid ""
+"If the deletions are intended, run one sync with a higher --max-delete; "
+"otherwise restore the files."
+msgstr ""
+
+msgid "Language:"
+msgstr ""
+
+msgid "Last successful sync: %1"
+msgstr ""
+
+msgctxt "sync step"
+msgid "Listing"
+msgstr ""
+
+msgid "Log"
+msgstr ""
+
+msgid "Looking for changes…"
+msgstr ""
+
+msgid ""
+"More than a quarter of the files would be deleted, so the sync stopped as a "
+"safety measure."
+msgstr ""
+
+msgid "No changes yet"
+msgstr ""
+
+msgid "No permission to change some files"
+msgstr ""
+
+msgid "None"
+msgstr ""
+
+msgid "Now"
+msgstr ""
+
+msgid "Offline"
+msgstr ""
+
+msgid "Offline · last sync %1"
+msgstr ""
+
+msgid "Open Google Drive in the browser"
+msgstr ""
+
+msgid "Open folder"
+msgstr ""
+
+msgid "Open the log for the full message."
+msgstr ""
+
+msgid "Open the sync log"
+msgstr ""
+
+msgid "Pause"
+msgstr ""
+
+msgid "Pause syncing"
+msgstr ""
+
+msgid "Paused"
+msgstr ""
+
+msgid "Paused · last sync %1"
+msgstr ""
+
+msgid "Recent changes"
+msgstr ""
+
+msgid "Recent changes shown:"
+msgstr ""
+
+msgid "Reconnect rclone to Google Drive with the command below."
+msgstr ""
+
+msgid "Resume"
+msgstr ""
+
+msgid "Resume syncing"
+msgstr ""
+
+msgid ""
+"Runs in a shell; the widget appends show, now, pause or resume. Plasma's "
+"PATH usually lacks ~/.local/bin, so keep the full path."
+msgstr ""
+
+msgctxt "sync step"
+msgid "Saving"
+msgstr ""
+
+msgid "Standard"
+msgstr ""
+
+msgid "Status command:"
+msgstr ""
+
+msgid "Sync helper not found"
+msgstr ""
+
+msgid "Sync now"
+msgstr ""
+
+msgid "Sync stopped"
+msgstr ""
+
+msgid "Sync stopped · %1"
+msgstr ""
+
+msgid "Sync stopped · failed %1 time in a row"
+msgid_plural "Sync stopped · failed %1 times in a row"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Syncing"
+msgstr ""
+
+msgid "Syncing · %1"
+msgstr ""
+
+msgid "Syncing · %1 of %2 files"
+msgstr ""
+
+msgid "Syncing…"
+msgstr ""
+
+msgid "System default"
+msgstr ""
+
+msgid "The Google Drive sign-in has expired"
+msgstr ""
+
+msgid "The details below come from the sync log."
+msgstr ""
+
+msgid ""
+"The widget reads its status with this command:\n"
+"%1 show\n"
+"\n"
+"Install the sync service with sync/install.sh from the widget's project, or "
+"change the command in the settings."
+msgstr ""
+
+msgid "Too many deletions at once"
+msgstr ""
+
+msgctxt "sync step"
+msgid "Transfer"
+msgstr ""
+
+msgid "Translucent"
+msgstr ""
+
+msgid "Try again"
+msgstr ""
+
+msgid "Up to date"
+msgstr ""
+
+msgid "Up to date · last sync %1"
+msgstr ""
+
+msgid "Uploaded today"
+msgstr ""
+
+msgid "Usually nothing to do: it retries automatically."
+msgstr ""
+
+msgid "What to do: %1"
+msgstr ""
+
+msgid "Your computer and Drive records don't match"
+msgstr ""
+
+msgctxt "sync phase"
+msgid "comparing"
+msgstr ""
+
+msgctxt "file in a running sync"
+msgid "done"
+msgstr ""
+
+msgid "just now"
+msgstr ""
+
+msgctxt "sync phase"
+msgid "listing files"
+msgstr ""
+
+msgid "never"
+msgstr ""
+
+msgctxt "file in a running sync"
+msgid "queued"
+msgstr ""
+
+msgid ""
+"rclone left a lock file behind. It expires on its own within 5 minutes and "
+"the next run continues."
+msgstr ""
+
+msgid "rclone reported an error"
+msgstr ""
+
+msgid ""
+"rclone's Google token is no longer valid, so it cannot reach your Drive."
+msgstr ""
+
+msgctxt "sync phase"
+msgid "saving the state"
+msgstr ""
+
+msgctxt "sync phase"
+msgid "transferring files"
+msgstr ""
+
+msgid "yesterday"
+msgstr ""

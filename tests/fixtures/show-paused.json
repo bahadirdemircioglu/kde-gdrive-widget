@@ -1,0 +1,49 @@
+{
+ "version": 1,
+ "serviceActive": false,
+ "localRoot": "/home/user/GoogleDrive",
+ "logPath": "/home/user/.local/state/gdrive-sync/sync.log",
+ "fileCount": 10287,
+ "failCount": 0,
+ "lastSuccessAt": "2026-11-06T11:22:07+03:00",
+ "lastRunAt": "2026-11-06T11:44:07+03:00",
+ "lastError": null,
+ "recent": [
+  {
+   "kind": "up",
+   "path": "Work/Clients/Acme/2026/offer.pdf",
+   "at": "2026-11-06T11:44:07+03:00"
+  },
+  {
+   "kind": "down",
+   "path": "Work/Training/certificate_list.xlsx",
+   "at": "2026-11-06T10:47:07+03:00"
+  },
+  {
+   "kind": "up",
+   "path": "Personal/Thesis/latex/main.tex",
+   "at": "2026-11-06T09:47:07+03:00"
+  },
+  {
+   "kind": "down",
+   "path": "Work/Accounting/Invoices/Eylül/fatura_22.pdf",
+   "at": "2026-11-05T11:47:07+03:00"
+  },
+  {
+   "kind": "deleted_remote",
+   "path": "Work/Projects/Old/draft.docx",
+   "at": "2026-11-05T11:47:07+03:00"
+  },
+  {
+   "kind": "up",
+   "path": "Projects/ai-lab/README.md",
+   "at": "2026-11-05T09:47:07+03:00"
+  },
+  {
+   "kind": "down",
+   "path": "Phone backups/Download/Report.pdf",
+   "at": "2026-11-04T11:47:07+03:00"
+  }
+ ],
+ "state": "paused"
+}

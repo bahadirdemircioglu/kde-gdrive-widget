@@ -1,0 +1,77 @@
+2026-10-16 17:54:50 === senkron ===
+2026/10/16 17:54:50 INFO  : Setting --ignore-listing-checksum as neither --checksum nor --compare checksum are set.
+2026/10/16 17:54:50 INFO  : Bisyncing with Comparison Settings: 
+{
+	"Modtime": true,
+	"Size": true,
+	"Checksum": false,
+	"HashType1": 0,
+	"HashType2": 0,
+	"NoSlowHash": false,
+	"SlowHashSyncOnly": false,
+	"SlowHashDetected": true,
+	"DownloadHash": false
+}
+2026/10/16 17:54:50 INFO  : Synching Path1 "/home/user/GoogleDrive/" with Path2 "gdrive{AB12C}:/"
+2026/10/16 17:54:50 INFO  : Building Path1 and Path2 listings
+2026/10/16 17:55:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:              7389 / 7389, 100%, Listed 7506
+Elapsed time:        59.9s
+
+2026/10/16 17:56:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             14357 / 14357, 100%, Listed 14530
+Elapsed time:      1m59.9s
+
+2026/10/16 17:57:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             20343 / 20343, 100%, Listed 20470
+Elapsed time:       3m0.0s
+
+2026/10/16 17:58:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             30357 / 30357, 100%, Listed 30569
+Elapsed time:      3m59.9s
+
+2026/10/16 17:59:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             41451 / 41451, 100%, Listed 41617
+Elapsed time:      4m59.9s
+
+2026/10/16 18:00:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             53711 / 53711, 100%, Listed 53905
+Elapsed time:      5m59.9s
+
+2026/10/16 18:01:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             61575 / 61575, 100%, Listed 61785
+Elapsed time:       7m0.0s
+
+2026/10/16 18:02:47 INFO  : Path1 checking for diffs
+2026/10/16 18:02:47 INFO  : - Path1             File is new                                 - Notes/server.txt
+2026/10/16 18:02:47 INFO  : Path1:    1 changes:    1 new,    0 modified,    0 deleted
+2026/10/16 18:02:47 INFO  : Path2 checking for diffs
+2026/10/16 18:02:48 INFO  : Applying changes
+2026/10/16 18:02:48 INFO  : - Path1             Queue copy to Path2                         - gdrive{AB12C}:/Notes/server.txt
+2026/10/16 18:02:48 INFO  : - Path1             Do queued copies to                         - Path2
+2026/10/16 18:02:50 INFO  : 
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             83827 / 83827, 100%, Listed 83947
+Elapsed time:       8m0.0s
+
+2026/10/16 18:02:51 INFO  : Notes: Set directory modification time (using SetModTime)
+2026/10/16 18:02:53 INFO  : Notes/server.txt: Copied (new)
+2026/10/16 18:02:53 INFO  : Updating listings
+2026/10/16 18:02:54 INFO  : Validating listings for Path1 "/home/user/GoogleDrive/" vs Path2 "gdrive{AB12C}:/"
+2026/10/16 18:02:54 INFO  : Bisync successful
+2026/10/16 18:02:54 INFO  : 
+Transferred:   	        535 B / 535 B, 100%, 267 B/s, ETA 0s
+Checks:             83827 / 83827, 100%, Listed 83970
+Transferred:            1 / 1, 100%
+Elapsed time:       8m3.8s
+
+2026-10-16 18:02:54 tamam.
+2026-10-16 18:07:56 === senkron ===
+2026/10/16 18:07:56 INFO  : Setting --ignore-listing-checksum as neither --checksum nor --compare checksum are set.

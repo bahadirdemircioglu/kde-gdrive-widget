@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Google Drive surekli iki yonlu senkron daemon'u.
+# Yerel degisiklikleri inotify ile aninda yakalar; uzak degisiklikler icin periyodik yoklar.
+# "gdrive-status now" (widget'taki "Simdi senkronla") tetik dosyasina yazar; daemon hemen uyanir.
+set -uo pipefail
+
+LOCAL="${GDRIVE_LOCAL:-$HOME/GoogleDrive}"
+SYNC="$(dirname "$(readlink -f "$0")")/gdrive-sync"
+STATE="$HOME/.local/state/gdrive-sync"
+LOG="$STATE/sync.log"
+TRIGGER_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/gdrive-sync"
+TRIGGER="$TRIGGER_DIR/now"
+POLL="${GDRIVE_POLL:-300}"        # uzak tarafi kac saniyede bir yokla
+DEBOUNCE="${GDRIVE_DEBOUNCE:-15}" # yerel degisiklik sonrasi birikme suresi
+
+mkdir -p "$LOCAL" "$STATE" "$TRIGGER_DIR"
+log() { echo "$(date '+%F %T') [daemon] $*" >>"$LOG"; }
+
+if command -v inotifywait >/dev/null 2>&1; then
+  log "basladi (anlik: inotify acik, uzak yoklama ${POLL}s)"
+  WATCH=1
+else
+  log "basladi (inotify-tools yok; sadece ${POLL}s araliklarla)"
+  WATCH=0
+fi
+
+WAITER=""   # arka plandaki inotifywait; durdurulunca onu da kapat
+EVENTS="$(mktemp "${TMPDIR:-/tmp}/gdrive-syncd.XXXXXX")"
+trap 'log "durduruldu"; [ -n "$WAITER" ] && kill "$WAITER" 2>/dev/null; rm -f "$EVENTS"; exit 0' TERM INT
+
+# Bir sonraki senkrona kadar bekler. Tetik gelirse hemen, yerel degisiklikte DEBOUNCE sonra doner.
+wait_for_change() {
+  # senkron surerken gelen tetik kaybolmasin
+  if [ -e "$TRIGGER" ]; then rm -f "$TRIGGER"; return; fi
+  if [ "$WATCH" = 1 ]; then
+    local changed rc
+    # Degisiklik olursa hemen uyanir (cikis 0), olmazsa POLL sonunda zaman asimi (cikis 2).
+    # Arka planda calisip "wait" ile beklenir: boylece TERM sinyali aninda islenir.
+    inotifywait -r -q -t "$POLL" --format '%w%f' \
+         -e modify,create,delete,move --exclude '/\.' "$LOCAL" "$TRIGGER_DIR" >"$EVENTS" 2>/dev/null &
+    WAITER=$!
+    wait "$WAITER"; rc=$?
+    WAITER=""
+    [ "$rc" = 0 ] || return 0
+    changed=$(head -n1 "$EVENTS")
+    if [ "${changed#"$TRIGGER_DIR"/}" != "$changed" ]; then
+      rm -f "$TRIGGER"
+      log "simdi senkronla istendi"
+    else
+      sleep "$DEBOUNCE"   # arka arkaya gelen degisiklikler biriksin
+    fi
+  else
+    local waited=0
+    while [ "$waited" -lt "$POLL" ] && [ ! -e "$TRIGGER" ]; do sleep 5; waited=$((waited + 5)); done
+    rm -f "$TRIGGER"
+  fi
+}
+
+while true; do
+  "$SYNC"
+  wait_for_change
+done

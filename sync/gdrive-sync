@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Google Drive <-> ~/GoogleDrive iki yonlu senkron (rclone bisync)
+set -uo pipefail
+
+REMOTE="${GDRIVE_REMOTE:-gdrive:}"           # rclone config'de verdigin uzak ad
+LOCAL="${GDRIVE_LOCAL:-$HOME/GoogleDrive}"
+STATE="$HOME/.local/state/gdrive-sync"
+LOG="$STATE/sync.log"
+LOCK="$STATE/lock"
+FAILS="$STATE/ardisik_hata"
+FILTERS="$HOME/.config/gdrive-sync/filters.txt"   # degisirse bir kez --resync gerekir
+
+mkdir -p "$LOCAL" "$STATE" "$(dirname "$FILTERS")"
+[ -f "$FILTERS" ] || printf '%s\n' '# gdrive-sync haric tutma kurallari (yeniden uretilebilir icerik)' \
+  '- .venv/**' '- __pycache__/**' '- node_modules/**' '- *.pyc' '- .~lock.*#' >"$FILTERS"
+
+# Log sinirsiz buyumesin (>20MB ise bir onceki log'a dondur)
+if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 20000000 ]; then mv -f "$LOG" "$LOG.1"; fi
+
+# Durum dosyasi (Plasma widget'i okur). Yardimci hata verse bile senkron etkilenmez.
+STATUS_BIN="$(dirname "$(readlink -f "$0")")/gdrive-status"
+status() { [ -x "$STATUS_BIN" ] && GDRIVE_LOCAL="$LOCAL" "$STATUS_BIN" "$@" >/dev/null 2>&1; return 0; }
+
+# Ardisik hatalari say; 3. hatada ve sonra saatte bir masaustu bildirimi gonder.
+# (17 Ekim 2026'da kalan bir kilit yuzunden senkron 19 gun sessizce durmustu.)
+fail() {
+  local n=$(( $(cat "$FAILS" 2>/dev/null || echo 0) + 1 ))
+  echo "$n" >"$FAILS"
+  echo "$(date '+%F %T') $1 (ardisik hata: $n)" >>"$LOG"
+  status end fail
+  if [ "$n" -eq 3 ] || { [ "$n" -gt 3 ] && [ $(( n % 12 )) -eq 0 ]; }; then
+    command -v notify-send >/dev/null && notify-send -u critical -a gdrive-sync \
+      "Google Drive senkronu calismiyor" "$1 — $n kez ust uste. Ayrinti: $LOG" 2>/dev/null
+  fi
+  exit 1
+}
+
+# "gdrive-sync --resync": temel durumu sifirdan kurar.
+# DIKKAT: resync iki tarafi BIRLESTIRIR; taraflar farkli duzenlenmisse dosyalar
+# hem eski hem yeni yerde kalir. Sadece iki taraf ayniyken (ya da filtre degisince) kullan.
+[ "${1:-}" = "--resync" ] && rm -f "$STATE/initialized"
+
+# Ayni anda iki senkron calismasin
+exec 9>"$LOCK"
+flock -n 9 || { echo "$(date '+%F %T') Onceki senkron hala calisiyor, atlandi." >>"$LOG"; exit 0; }
+
+# Internet / uzak erisim yoksa bosuna ugrasma
+if ! rclone lsd "$REMOTE" --max-depth 1 >/dev/null 2>&1; then
+  echo "$(date '+%F %T') Drive'a ulasilamadi (internet yok?), atlandi." >>"$LOG"
+  status begin; status end offline
+  exit 0
+fi
+
+ARGS=(
+  --create-empty-src-dirs
+  --drive-skip-gdocs          # Google Docs/Sheets indirilemez, atla
+  --conflict-resolve newer    # Cakismada yeni olan kazanir
+  --conflict-loser pathname   # Kaybeden dosya silinmez, ..conflict1 olarak saklanir
+  --max-delete 25             # Tek seferde %25'ten fazla silme olursa dur (guvenlik)
+  --resilient                 # Gecici hatalarda kendini toparlar
+  --recover
+  --max-lock 5m               # Yarida kalan calismanin kilidi 5 dk sonra gecersiz olur
+  --filters-file "$FILTERS"   # .venv, __pycache__ vb. senkronlanmaz
+  --transfers 8 --checkers 16
+  --log-file "$LOG" --log-level INFO
+)
+
+# Ilk calistirmada temel durumun olusturulmasi gerekir
+status begin
+if [ ! -f "$STATE/initialized" ]; then
+  echo "$(date '+%F %T') === ILK SENKRON (--resync) ===" >>"$LOG"
+  if rclone bisync "$LOCAL" "$REMOTE" --resync "${ARGS[@]}"; then
+    touch "$STATE/initialized"
+  else
+    fail "Ilk senkron (--resync) BASARISIZ"
+  fi
+else
+  echo "$(date '+%F %T') === senkron ===" >>"$LOG"
+  rclone bisync "$LOCAL" "$REMOTE" "${ARGS[@]}" || \
+    fail "Senkron hatasi. --resync calistirmadan once log'u incele (iki tarafi birlestirir)"
+fi
+rm -f "$FAILS"
+status end ok
+echo "$(date '+%F %T') tamam." >>"$LOG"

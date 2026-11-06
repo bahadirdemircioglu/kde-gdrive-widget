@@ -1,0 +1,29 @@
+2026-11-06 14:00:00 === senkron ===
+2026/11/06 14:00:00 INFO  : Synching Path1 "/home/u/GoogleDrive/" with Path2 "gdrive{AB12C}:/"
+2026/11/06 14:00:00 INFO  : Building Path1 and Path2 listings
+Transferred:   	          0 B / 0 B, -, 0 B/s, ETA -
+Checks:             7682 / 7682, 100%, Listed 7783
+Elapsed time:        59.9s
+
+2026/11/06 14:01:10 INFO  : Path1 checking for diffs
+2026/11/06 14:01:10 INFO  : - Path1             File is new                                 - Şirket/Teklif 2026 [Conflict].pdf
+2026/11/06 14:01:10 INFO  : - Path1             File was deleted                            - Eski/eski.txt
+2026/11/06 14:01:10 INFO  : Path1:    2 changes:    1 new,    0 modified,    1 deleted
+2026/11/06 14:01:10 INFO  : Path2 checking for diffs
+2026/11/06 14:01:10 INFO  : - Path2             File changed: size (larger), time (newer)    - Proje/Liste.xlsx
+2026/11/06 14:01:10 INFO  : - Path2             File was deleted                            - Telefon yedekleri/Rapor.pdf
+2026/11/06 14:01:10 INFO  : Path2:    2 changes:    0 new,    1 modified,    1 deleted
+2026/11/06 14:01:11 INFO  : Applying changes
+2026/11/06 14:01:11 INFO  : - Path1             Queue copy to Path2                         - gdrive{AB12C}:/Şirket/Teklif 2026 [Conflict].pdf
+2026/11/06 14:01:11 INFO  : - Path2             Queue delete                                - gdrive{AB12C}:/Eski/eski.txt
+2026/11/06 14:01:11 INFO  : - Path2             Queue copy to Path1                         - /home/u/GoogleDrive/Proje/Liste.xlsx
+2026/11/06 14:01:11 INFO  : - Path1             Queue delete                                - /home/u/GoogleDrive/Telefon yedekleri/Rapor.pdf
+2026/11/06 14:01:11 INFO  : - Path2             Do queued copies to                         - Path1
+2026/11/06 14:01:12 INFO  : Proje/Liste.xlsx: Copied (replaced existing)
+2026/11/06 14:01:12 INFO  : Telefon yedekleri/Rapor.pdf: Deleted
+2026/11/06 14:01:12 INFO  : - Path1             Do queued copies to                         - Path2
+Transferred:   	    1.250 MiB / 3.100 MiB, 40%, 1.2 MiB/s, ETA 1s
+Checks:                 2 / 2, 100%
+Transferred:            1 / 2, 50%
+Elapsed time:       1m12.0s
+

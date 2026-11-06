@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""gdrive-status: status file for the gdrive-sync service, read by the Plasma widget.
+
+  gdrive-status begin              a sync run starts (remembers where it starts in sync.log)
+  gdrive-status end ok|fail|offline  the run ended; records changes, errors and counts
+  gdrive-status show               prints the status as JSON (+ live phase while syncing)
+  gdrive-status now                asks the daemon to sync right away
+  gdrive-status pause | resume     stops / starts the systemd user service
+
+Only the Python standard library is used. Environment overrides (defaults in brackets):
+GDRIVE_LOCAL [~/GoogleDrive], GDRIVE_STATE [~/.local/state/gdrive-sync],
+GDRIVE_BISYNC_DIR [~/.cache/rclone/bisync], GDRIVE_SERVICE [gdrive-sync.service],
+GDRIVE_SYSTEMCTL [systemctl], XDG_RUNTIME_DIR [/run/user/<uid>].
+"""
+import datetime
+import glob
+import json
+import os
+import re
+import subprocess
+import sys
+
+RECENT_MAX = 50
+CURRENT_MAX = 20
+ERROR_LINES = 4
+
+# "INFO  : - Path1   Queue copy to Path2   - gdrive{AB12C}:/dir/file"
+QUEUE_RE = re.compile(r"INFO  : - (Path[12])\s+(Queue copy to Path[12]|Queue delete)\s+- (.+)$")
+DONE_RE = re.compile(r"INFO  : (.+): (Copied \(|Deleted$|Updated modification time)")
+FILES_PROGRESS_RE = re.compile(r"^Transferred:\s+(\d+) / (\d+), ")
+REMOTE_PREFIX_RE = re.compile(r"^[^:/]+(\{[^}]*\})?:/?")
+PHASES = [
+    ("Building Path1 and Path2 listings", "listing"),
+    ("Path1 checking for diffs", "comparing"),
+    ("Applying changes", "transferring"),
+    ("Updating listings", "saving"),
+]
+ERROR_CODES = [  # first match wins
+    ("prior lock file found", "lock"),
+    ("out of sync", "out_of_sync"),
+    ("too many deletes", "too_many_deletes"),
+    ("insufficientFilePermissions", "permission"),
+    ("invalid_grant", "auth"),
+]
+
+
+def env(name, default):
+    return os.environ.get(name) or default
+
+
+HOME = os.path.expanduser("~")
+LOCAL = env("GDRIVE_LOCAL", os.path.join(HOME, "GoogleDrive")).rstrip("/")
+STATE = env("GDRIVE_STATE", os.path.join(HOME, ".local/state/gdrive-sync"))
+BISYNC_DIR = env("GDRIVE_BISYNC_DIR", os.path.join(HOME, ".cache/rclone/bisync"))
+SERVICE = env("GDRIVE_SERVICE", "gdrive-sync.service")
+SYSTEMCTL = env("GDRIVE_SYSTEMCTL", "systemctl")
+RUNTIME = env("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+STATUS = os.path.join(STATE, "status.json")
+LOG = os.path.join(STATE, "sync.log")
+FAILS = os.path.join(STATE, "ardisik_hata")
+TRIGGER_DIR = os.path.join(RUNTIME, "gdrive-sync")
+
+
+def now_iso():
+    return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+# ---------- log parsing ----------
+
+def classify(text):
+    for needle, code in ERROR_CODES:
+        if needle in text:
+            return code
+    return "unknown"
+
+
+def _relative(path, local_root):
+    root = local_root.rstrip("/") + "/"
+    if path.startswith(root):
+        return path[len(root):]
+    return REMOTE_PREFIX_RE.sub("", path, count=1)
+
+
+def parse_run(text, local_root):
+    """Parses the sync.log slice of one run."""
+    changes, done, phase, progress, ok, err_lines = [], set(), None, None, False, []
+    for line in text.splitlines():
+        m = QUEUE_RE.search(line)
+        if m:
+            side, action, target = m.groups()
+            path = _relative(target.rstrip(), local_root)
+            if action == "Queue delete":
+                kind = "deleted_remote" if side == "Path2" else "deleted_local"
+            else:
+                kind = "up" if action.endswith("Path2") else "down"
+            changes.append({"kind": kind, "path": path})
+            continue
+        m = DONE_RE.search(line)
+        if m:
+            done.add(m.group(1))
+            continue
+        m = FILES_PROGRESS_RE.match(line)
+        if m:
+            progress = {"done": int(m.group(1)), "total": int(m.group(2))}
+            continue
+        for marker, name in PHASES:
+            if marker in line:
+                phase = name
+        if "Bisync successful" in line:
+            ok = True
+        if "ERROR" in line or "NOTICE: Failed" in line:
+            err_lines.append(line.strip())
+    error = None
+    if err_lines and not ok:
+        error = {"code": classify("\n".join(err_lines)), "lines": err_lines[-ERROR_LINES:]}
+    current = [dict(c, done=c["path"] in done) for c in changes][:CURRENT_MAX]
+    return {"changes": changes, "current": current, "phase": phase,
+            "progress": progress, "ok": ok, "error": error}
+
+
+# ---------- status file ----------
+
+def load_status():
+    try:
+        with open(STATUS, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_status(data):
+    os.makedirs(STATE, exist_ok=True)
+    tmp = STATUS + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, STATUS)
+
+
+def log_size():
+    try:
+        return os.path.getsize(LOG)
+    except OSError:
+        return 0
+
+
+def read_run_log(offset):
+    try:
+        with open(LOG, "rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            f.seek(offset if 0 <= offset <= size else 0)
+            return f.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
+def fail_count():
+    try:
+        with open(FAILS) as f:
+            return int(f.read().strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def file_count():
+    lists = glob.glob(os.path.join(BISYNC_DIR, "*.path1.lst"))
+    if not lists:
+        return None
+    newest = max(lists, key=os.path.getmtime)
+    n = 0
+    with open(newest, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if line.startswith("- "):
+                n += 1
+    return n
+
+
+def service_active():
+    try:
+        p = subprocess.run([SYSTEMCTL, "--user", "is-active", "--quiet", SERVICE],
+                           capture_output=True, timeout=5)
+        return p.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+# ---------- commands ----------
+
+def cmd_begin():
+    st = load_status()
+    st.update(version=1, state="syncing", runStartedAt=now_iso(), logOffset=log_size())
+    save_status(st)
+
+
+def cmd_end(result):
+    st = load_status()
+    run = parse_run(read_run_log(int(st.get("logOffset") or 0)), LOCAL)
+    at = now_iso()
+    recent = [dict(c, at=at) for c in run["changes"]] + list(st.get("recent") or [])
+    st.update(version=1, lastRunAt=at, recent=recent[:RECENT_MAX], failCount=fail_count())
+    count = file_count()
+    if count is not None:
+        st["fileCount"] = count
+    if result == "ok":
+        st.update(state="synced", lastSuccessAt=at, lastError=None, failCount=0)
+    elif result == "offline":
+        st["state"] = "offline"
+    else:
+        error = run["error"] or {"code": "unknown", "lines": []}
+        st.update(state="error", lastError=dict(error, at=at))
+    st.setdefault("lastSuccessAt", None)
+    st.setdefault("lastError", None)
+    save_status(st)
+
+
+def cmd_show():
+    st = load_status()
+    active = service_active()
+    out = dict(st) if st.get("state") else {"state": "missing"}
+    out.update(serviceActive=active, localRoot=LOCAL, logPath=LOG)
+    if out["state"] == "syncing":
+        if not active:
+            out["state"] = "paused"
+        else:
+            run = parse_run(read_run_log(int(st.get("logOffset") or 0)), LOCAL)
+            out.update(phase=run["phase"] or "listing", progress=run["progress"], current=run["current"])
+    elif out["state"] != "missing" and not active:
+        out["state"] = "paused"
+    print(json.dumps(out, ensure_ascii=False))
+
+
+def cmd_now():
+    os.makedirs(TRIGGER_DIR, exist_ok=True)
+    with open(os.path.join(TRIGGER_DIR, "now"), "w") as f:
+        f.write(now_iso() + "\n")
+
+
+def cmd_service(verb):
+    subprocess.run([SYSTEMCTL, "--user", verb, SERVICE], check=False)
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else "show"
+    if cmd == "begin":
+        cmd_begin()
+    elif cmd == "end" and len(argv) > 2 and argv[2] in ("ok", "fail", "offline"):
+        cmd_end(argv[2])
+    elif cmd == "show":
+        cmd_show()
+    elif cmd == "now":
+        cmd_now()
+    elif cmd in ("pause", "resume"):
+        cmd_service("stop" if cmd == "pause" else "start")
+    else:
+        print(__doc__, file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
