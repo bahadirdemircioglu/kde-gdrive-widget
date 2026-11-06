@@ -146,10 +146,12 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 
 ### Task 9: Widget UI
 
-**Files:** Create `package/contents/ui/SetupWizard.qml`. Modify `StatusSource.qml` (`setup(args, tag)`, results by tag), `FullRepresentation.qml` (`unconfigured` → wizard; mode label under title; notices "N conflicts kept aside" → open conflicts dir, "N items have duplicate names on Drive" → open in Drive), `ConfigGeneral.qml` ("Change setup…" opens the wizard prefilled, "Disconnect…" with "Also remove the Google login" checkbox only when `createdRemote`), `Texts.qml`, `ErrorCard` (`not_initialized` text + "Set up again"), `translations/tr.po`.
+**Files:** Create `package/contents/ui/SetupWizard.qml`. Modify `StatusSource.qml` (`setup(args, tag)`, results by tag), `FullRepresentation.qml` (`unconfigured` → wizard; mode label under title; notices "N conflicts kept aside" → open conflicts dir, "N items have duplicate names on Drive" → open in Drive), "Change setup…" and "Disconnect…" (with "Also remove the Google sign-in" only when `createdRemote`) in the popup's menu and the widget's right-click menu — *changed while building: the settings dialog runs apart from the popup and cannot open the wizard in it*, `Texts.qml`, `ErrorCard` (`not_initialized` text + "Set up again"), `translations/tr.po`.
 
-- [ ] Pages: Requirements (missing items, copyable `installCommand`, "Check again"), Account (existing remotes + "Connect a new Google account"; while running shows "Waiting for the browser…" and the `authUrl` as a link, "Cancel"), Drive folder (breadcrumb + list, "Use My Drive"), Local folder (path field + `FolderDialog`, inline reason when refused), Mode (three radio cards, two-way default, one sentence each), Preview (three counts, three choices, recommended first), Progress (progress bar from `setup.progress`, "Cancel"), Done.
-- [ ] `qmllint -I /usr/lib/qt6/qml` clean; i18n extract/build; fake `show` outputs for every page in `tests/fixtures/show-setup-*.json`; `plasmawindowed` screenshot per page (spectacle `-b -n -a`, no key input). Commit.
+- [x] Pages: Requirements (missing items, copyable `installCommand`, "Check again"), Account (existing remotes + "Connect a new Google account"; while running shows "Waiting for the browser…" and the `authUrl` as a link, "Cancel"), Drive folder (breadcrumb + list, "Use My Drive"), Local folder (path field + `FolderDialog`, inline reason when refused), Mode (three radio cards, two-way default, one sentence each), Preview (three counts, three choices, recommended first), Progress (progress bar from `setup.progress`, "Cancel"), Done.
+- [x] `qmllint -I /usr/lib/qt6/qml` clean; i18n extract/build; fake `show` outputs for every page in `tests/fixtures/show-setup-*.json`; `plasmawindowed` screenshot per page (spectacle `-b -n -a`, no key input). Commit.
+
+- [x] Screenshots: isolated preview copy (own plugin id, helper = `cat` of fixture files), one window, 12 states; preview package and its window config removed afterwards.
 
 ### Task 10: End to end, release, live migration
 

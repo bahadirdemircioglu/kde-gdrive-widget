@@ -3,6 +3,7 @@ import QtQuick
 import org.kde.plasma.plasma5support as P5Support
 
 import "logic/Status.js" as Status
+import "logic/Setup.js" as Setup
 
 // Talks to the status helper (gdrive-status) through Plasma's executable engine and keeps
 // the parsed model. The widget never runs rclone itself.
@@ -11,6 +12,8 @@ Item {
 
     // shell command for the helper; the action is appended ("show", "now", "pause", "resume")
     property string helper: '"$HOME/.local/bin/gdrive-status"'
+    // the sync scripts bundled in the plasmoid: used for setup, and while nothing is installed
+    readonly property string bundled: Status.bundledDir(Qt.resolvedUrl("../code/sync"))
     // the popup is open: refresh more often
     property bool expanded: false
 
@@ -23,13 +26,20 @@ Item {
     property string busyAction: ""
 
     function refresh() {
-        exec(helper + " show", "show");
+        exec(Status.helperCommand(helper, bundled, "show"), "show");
     }
 
     // action: "now" | "pause" | "resume"
     function act(action) {
         busyAction = action;
-        exec(helper + " " + action, action);
+        exec(Status.helperCommand(helper, bundled, action), action);
+    }
+
+    // one `gdrive-setup <args...> --json` step; callback(result object)
+    function setupStep(args, callback) {
+        var cmd = Status.setupCommand(bundled, args);
+        engine.callbacks[cmd] = callback;
+        exec(cmd, "setup");
     }
 
     // shellCommand is already quoted (Status.openCommand / Status.shellQuote)
@@ -60,6 +70,7 @@ Item {
         engine: "executable"
         connectedSources: []
         property var tags: ({})
+        property var callbacks: ({})
 
         onNewData: function (sourceName, data) {
             var tag = tags[sourceName];
@@ -69,8 +80,16 @@ Item {
                 source.model = Status.parseShow(data["stdout"] || "");
                 source.loaded = true;
                 source.nowMs = Date.now();
-                poll.interval = Status.nextPollMs(source.model.state, source.expanded);
+                poll.interval = Status.nextPollMs(source.model.state, source.expanded, source.model.setup);
                 poll.restart();
+            } else if (tag === "setup") {
+                var cb = callbacks[sourceName];
+                delete callbacks[sourceName];
+                if (cb) {
+                    cb(Setup.parseStep(data["stdout"] || ""));
+                }
+                soon.interval = 300;
+                soon.restart();
             } else if (tag === "now" || tag === "pause" || tag === "resume") {
                 source.busyAction = "";
                 // "now" only wakes the daemon; give it a moment to start the run

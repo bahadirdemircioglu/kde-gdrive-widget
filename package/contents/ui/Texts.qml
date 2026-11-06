@@ -18,8 +18,72 @@ QtObject {
             return Lang.i18n("Paused");
         case "offline":
             return Lang.i18n("Offline");
+        case "unconfigured":
+            return Lang.i18n("Not set up yet");
         }
         return Lang.i18n("Sync helper not found");
+    }
+
+    function modeLabel(mode) {
+        switch (mode) {
+        case "upload":
+            return Lang.i18n("Upload only");
+        case "download":
+            return Lang.i18n("Download only");
+        }
+        return Lang.i18n("Two-way");
+    }
+
+    function modeDescription(mode) {
+        switch (mode) {
+        case "upload":
+            return Lang.i18n("This computer is copied to Drive. Nothing is ever deleted on Drive, so it works like a backup.");
+        case "download":
+            return Lang.i18n("Drive is copied to this computer. Nothing is ever deleted here, so it works like a backup.");
+        }
+        return Lang.i18n("Changes on either side reach the other, deletions included. The folder always looks like your Drive.");
+    }
+
+    // a failed setup step (codes from gdrive-setup)
+    function setupError(error) {
+        var code = error ? error.code : "";
+        switch (code) {
+        case "offline":
+            return Lang.i18n("Google Drive could not be reached. Check the internet connection and try again.");
+        case "auth":
+            return Lang.i18n("The Google sign-in did not finish. Try again and allow access in the browser.");
+        case "name_taken":
+            return Lang.i18n("An rclone connection with this name already exists.");
+        case "needs_choice":
+            return Lang.i18n("This folder already has files; choose what to do with them first.");
+        case "interrupted":
+            return Lang.i18n("The setup was interrupted (for example by a restart). Files already copied are kept; start it again to continue.");
+        case "systemd":
+            return Lang.i18n("The background service could not be started.");
+        case "rclone_missing":
+            return Lang.i18n("rclone is not installed.");
+        case "no_output":
+            return Lang.i18n("The setup helper did not answer.");
+        case "sync":
+            return Lang.i18n("The first sync failed. Files already copied are kept; open the log for details or try again.");
+        }
+        return error && error.message ? error.message : Lang.i18n("Something went wrong.");
+    }
+
+    function localFolderProblem(reason) {
+        switch (reason) {
+        case "root":
+            return Lang.i18n("The root folder cannot be synced.");
+        case "home":
+            return Lang.i18n("Choose a folder inside your home folder, not the home folder itself.");
+        case "file":
+            return Lang.i18n("This is a file, not a folder.");
+        case "nested":
+            return Lang.i18n("This folder overlaps the folder that is already in sync.");
+        case "state":
+            return Lang.i18n("This folder holds the sync service's own data.");
+        }
+        return "";
     }
 
     function relText(rel) {
@@ -90,6 +154,8 @@ QtObject {
             return Lang.i18n("Paused · last sync %1", ago(m.lastSuccessAt, nowMs));
         case "offline":
             return Lang.i18n("Offline · last sync %1", ago(m.lastSuccessAt, nowMs));
+        case "unconfigured":
+            return m.setup && m.setup.state === "running" ? Lang.i18n("Setting up…") : Lang.i18n("Not set up yet");
         }
         return Lang.i18n("Sync helper not found");
     }
@@ -106,6 +172,8 @@ QtObject {
             return Lang.i18n("No permission to change some files");
         case "auth":
             return Lang.i18n("The Google Drive sign-in has expired");
+        case "not_initialized":
+            return Lang.i18n("The setup was not finished");
         }
         return Lang.i18n("rclone reported an error");
     }
@@ -122,6 +190,8 @@ QtObject {
             return Lang.i18n("Google Drive refused a change (403), usually for files owned by someone else.");
         case "auth":
             return Lang.i18n("rclone's Google token is no longer valid, so it cannot reach your Drive.");
+        case "not_initialized":
+            return Lang.i18n("Two-way sync needs a first sync that records both sides. It never starts one on its own, because merging two different sides creates duplicates.");
         }
         return Lang.i18n("The details below come from the sync log.");
     }
@@ -138,17 +208,19 @@ QtObject {
             return Lang.i18n("Don't delete those files on this computer; remove them on drive.google.com or ask their owner.");
         case "auth":
             return Lang.i18n("Reconnect rclone to Google Drive with the command below.");
+        case "not_initialized":
+            return Lang.i18n("Run the setup again; it checks the folder before the first sync.");
         }
         return Lang.i18n("Open the log for the full message.");
     }
 
     // a terminal command that goes with the advice (shown copyable, never run by the widget)
-    function errorCommand(code) {
+    function errorCommand(code, remote) {
         switch (code) {
         case "out_of_sync":
             return "gdrive-sync --resync";
         case "auth":
-            return "rclone config reconnect gdrive:";
+            return "rclone config reconnect " + Status.shellQuote(remote || "gdrive:");
         }
         return "";
     }

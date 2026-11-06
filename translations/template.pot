@@ -19,13 +19,28 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
+msgid "%1 (already connected)"
+msgstr ""
+
 msgid "%1 day ago"
 msgid_plural "%1 days ago"
 msgstr[0] ""
 msgstr[1] ""
 
+msgid "%1 file was changed on both sides; the older copy was kept aside."
+msgid_plural ""
+"%1 files were changed on both sides; the older copies were kept aside."
+msgstr[0] ""
+msgstr[1] ""
+
 msgid "%1 hour ago"
 msgid_plural "%1 hours ago"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "%1 item has a duplicate name on Drive; only one of them is synced: %2"
+msgid_plural ""
+"%1 items have duplicate names on Drive; only one of each is synced: %2"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -39,6 +54,12 @@ msgid_plural "%2 of %1 files transferred"
 msgstr[0] ""
 msgstr[1] ""
 
+msgid "(recommended)"
+msgstr ""
+
+msgid "A few programs are missing"
+msgstr ""
+
 msgid "A previous sync was interrupted"
 msgstr ""
 
@@ -47,9 +68,53 @@ msgid ""
 "files are safe; syncing is on hold."
 msgstr ""
 
+msgid "Also remove the Google sign-in from this computer"
+msgstr ""
+
+msgid "An rclone connection with this name already exists."
+msgstr ""
+
+msgid "Back"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Change answers"
+msgstr ""
+
+msgid "Change setup…"
+msgstr ""
+
+msgid ""
+"Changes on either side reach the other, deletions included. The folder "
+"always looks like your Drive."
+msgstr ""
+
+msgid "Check again"
+msgstr ""
+
+msgid "Checking…"
+msgstr ""
+
+msgid "Choose a folder inside your home folder, not the home folder itself."
+msgstr ""
+
+msgid "Choose…"
+msgstr ""
+
+msgid "Click a folder to open it; the folder shown above is synced."
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
 msgid ""
 "Compare both sides; only if they are identical run the command below. Never "
 "resync while they differ."
+msgstr ""
+
+msgid "Compared with Drive:"
 msgstr ""
 
 msgctxt "sync step"
@@ -57,6 +122,9 @@ msgid "Comparing"
 msgstr ""
 
 msgid "Configure…"
+msgstr ""
+
+msgid "Connect a Google account"
 msgstr ""
 
 msgid "Copy"
@@ -68,9 +136,24 @@ msgstr ""
 msgid "Details"
 msgstr ""
 
+msgid "Different"
+msgstr ""
+
+msgid "Disconnect"
+msgstr ""
+
+msgid "Disconnect Google Drive?"
+msgstr ""
+
+msgid "Disconnect…"
+msgstr ""
+
 msgid ""
 "Don't delete those files on this computer; remove them on drive.google.com "
 "or ask their owner."
+msgstr ""
+
+msgid "Download only"
 msgstr ""
 
 msgid "Downloaded today"
@@ -79,7 +162,35 @@ msgstr ""
 msgid "Drive"
 msgstr ""
 
+msgid ""
+"Drive is copied to this computer. Nothing is ever deleted here, so it works "
+"like a backup."
+msgstr ""
+
+msgid "Drive then appears exactly as it is, with no extra files."
+msgstr ""
+
+msgid "Everything in My Drive"
+msgstr ""
+
 msgid "Files"
+msgstr ""
+
+msgid ""
+"Files only here are uploaded to Drive; for different files the newer one "
+"wins and the older is kept aside."
+msgstr ""
+
+msgid "Files that are only here are moved to %1, not deleted."
+msgstr ""
+
+msgid "First sync · %1"
+msgstr ""
+
+msgid "First sync · %1 of %2 files"
+msgstr ""
+
+msgid "Folder on this computer"
 msgstr ""
 
 msgid "General"
@@ -89,12 +200,26 @@ msgid "Google Drive"
 msgstr ""
 
 msgid ""
+"Google Drive could not be reached. Check the internet connection and try "
+"again."
+msgstr ""
+
+msgid ""
 "Google Drive refused a change (403), usually for files owned by someone else."
+msgstr ""
+
+msgid "Google account"
+msgstr ""
+
+msgid "How to sync"
 msgstr ""
 
 msgid ""
 "If the deletions are intended, run one sync with a higher --max-delete; "
 "otherwise restore the files."
+msgstr ""
+
+msgid "Install them by running this in a terminal (it asks for your password):"
 msgstr ""
 
 msgid "Language:"
@@ -113,9 +238,27 @@ msgstr ""
 msgid "Looking for changes…"
 msgstr ""
 
+msgid "Make this folder match Drive"
+msgstr ""
+
+msgid "Merge both"
+msgstr ""
+
+msgid "More"
+msgstr ""
+
 msgid ""
 "More than a quarter of the files would be deleted, so the sync stopped as a "
 "safety measure."
+msgstr ""
+
+msgid "My Drive"
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "No browser opened? Open the sign-in page"
 msgstr ""
 
 msgid "No changes yet"
@@ -124,7 +267,13 @@ msgstr ""
 msgid "No permission to change some files"
 msgstr ""
 
+msgid "No sub-folders"
+msgstr ""
+
 msgid "None"
+msgstr ""
+
+msgid "Not set up yet"
 msgstr ""
 
 msgid "Now"
@@ -136,10 +285,28 @@ msgstr ""
 msgid "Offline · last sync %1"
 msgstr ""
 
+msgid "Only in this folder"
+msgstr ""
+
+msgid "Only on Drive"
+msgstr ""
+
+msgid "Only one folder"
+msgstr ""
+
+msgid "Open"
+msgstr ""
+
+msgid "Open Drive"
+msgstr ""
+
 msgid "Open Google Drive in the browser"
 msgstr ""
 
 msgid "Open folder"
+msgstr ""
+
+msgid "Open kept copies"
 msgstr ""
 
 msgid "Open the log for the full message."
@@ -175,19 +342,55 @@ msgstr ""
 msgid "Resume syncing"
 msgstr ""
 
+msgid "Run the setup again; it checks the folder before the first sync."
+msgstr ""
+
 msgid ""
 "Runs in a shell; the widget appends show, now, pause or resume. Plasma's "
 "PATH usually lacks ~/.local/bin, so keep the full path."
+msgstr ""
+
+msgid "Same"
 msgstr ""
 
 msgctxt "sync step"
 msgid "Saving"
 msgstr ""
 
+msgid "Set up again…"
+msgstr ""
+
+msgid "Set up…"
+msgstr ""
+
+msgid "Setting up Google Drive"
+msgstr ""
+
+msgid "Setting up…"
+msgstr ""
+
+msgid "Sign in to Google in the browser and allow access…"
+msgstr ""
+
+msgid "Sign in…"
+msgstr ""
+
+msgid "Something went wrong."
+msgstr ""
+
 msgid "Standard"
 msgstr ""
 
+msgid "Start syncing"
+msgstr ""
+
 msgid "Status command:"
+msgstr ""
+
+msgid "Step %1 of %2"
+msgstr ""
+
+msgid "Stopped. Files already copied are kept; start again to continue."
 msgstr ""
 
 msgid "Sync helper not found"
@@ -210,6 +413,11 @@ msgstr[1] ""
 msgid "Syncing"
 msgstr ""
 
+msgid ""
+"Syncing stops. The files in %1 stay where they are and nothing changes on "
+"Drive. You can set it up again at any time."
+msgstr ""
+
 msgid "Syncing · %1"
 msgstr ""
 
@@ -225,15 +433,74 @@ msgstr ""
 msgid "The Google Drive sign-in has expired"
 msgstr ""
 
+msgid ""
+"The Google sign-in did not finish. Try again and allow access in the browser."
+msgstr ""
+
+msgid "The background service could not be started."
+msgstr ""
+
 msgid "The details below come from the sync log."
+msgstr ""
+
+msgid "The earlier setup of this folder continues where it stopped."
+msgstr ""
+
+msgid ""
+"The first sync failed. Files already copied are kept; open the log for "
+"details or try again."
+msgstr ""
+
+msgid ""
+"The folder already has files. Before anything is copied you will see what "
+"differs from Drive."
+msgstr ""
+
+msgid "The folder is empty."
+msgstr ""
+
+msgid "The folder will be created."
+msgstr ""
+
+msgid "The root folder cannot be synced."
+msgstr ""
+
+msgid "The setup helper did not answer."
+msgstr ""
+
+msgid ""
+"The setup was interrupted (for example by a restart). Files already copied "
+"are kept; start it again to continue."
+msgstr ""
+
+msgid "The setup was not finished"
 msgstr ""
 
 msgid ""
 "The widget reads its status with this command:\n"
 "%1 show\n"
 "\n"
-"Install the sync service with sync/install.sh from the widget's project, or "
-"change the command in the settings."
+"Run gdrive-setup in a terminal, or change the command in the settings."
+msgstr ""
+
+msgid ""
+"This computer is copied to Drive. Nothing is ever deleted on Drive, so it "
+"works like a backup."
+msgstr ""
+
+msgid "This folder already has files"
+msgstr ""
+
+msgid "This folder already has files; choose what to do with them first."
+msgstr ""
+
+msgid "This folder holds the sync service's own data."
+msgstr ""
+
+msgid "This folder overlaps the folder that is already in sync."
+msgstr ""
+
+msgid "This is a file, not a folder."
 msgstr ""
 
 msgid "Too many deletions at once"
@@ -249,19 +516,53 @@ msgstr ""
 msgid "Try again"
 msgstr ""
 
+msgid "Two-way"
+msgstr ""
+
+msgid ""
+"Two-way sync needs a first sync that records both sides. It never starts one "
+"on its own, because merging two different sides creates duplicates."
+msgstr ""
+
+msgid "Up"
+msgstr ""
+
 msgid "Up to date"
 msgstr ""
 
 msgid "Up to date · last sync %1"
 msgstr ""
 
+msgid "Upload only"
+msgstr ""
+
 msgid "Uploaded today"
+msgstr ""
+
+msgid "Use another, empty folder (recommended)"
 msgstr ""
 
 msgid "Usually nothing to do: it retries automatically."
 msgstr ""
 
 msgid "What to do: %1"
+msgstr ""
+
+msgid "What to sync from Drive"
+msgstr ""
+
+msgid "Where should the files appear on this computer?"
+msgstr ""
+
+msgid "Which Google account should be synced?"
+msgstr ""
+
+msgid "You can close this; the setup keeps running in the background."
+msgstr ""
+
+msgid ""
+"Your browser opens Google's sign-in page. rclone keeps the access key on "
+"this computer only."
 msgstr ""
 
 msgid "Your computer and Drive records don't match"
@@ -273,6 +574,9 @@ msgstr ""
 
 msgctxt "file in a running sync"
 msgid "done"
+msgstr ""
+
+msgid "inotify-tools (optional: uploads start right away)"
 msgstr ""
 
 msgid "just now"
@@ -287,6 +591,12 @@ msgstr ""
 
 msgctxt "file in a running sync"
 msgid "queued"
+msgstr ""
+
+msgid "rclone 1.66 or newer"
+msgstr ""
+
+msgid "rclone is not installed."
 msgstr ""
 
 msgid ""
@@ -305,8 +615,14 @@ msgctxt "sync phase"
 msgid "saving the state"
 msgstr ""
 
+msgid "systemd user session"
+msgstr ""
+
 msgctxt "sync phase"
 msgid "transferring files"
+msgstr ""
+
+msgid "version %1 is too old"
 msgstr ""
 
 msgid "yesterday"

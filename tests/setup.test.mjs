@@ -26,6 +26,7 @@ test("canNext per page", () => {
   assert.equal(W.canNext("preview", { firstSync: "" }), false);
   assert.equal(W.canNext("preview", { firstSync: "match" }), true);
   assert.equal(W.canNext("preview", { firstSync: "merge" }), true);
+  assert.equal(W.canNext("preview", { firstSync: "another" }), true);
 });
 
 test("applyArgs: the first-sync rule", () => {
@@ -50,4 +51,11 @@ test("parseStep: JSON from a gdrive-setup step, errors become {ok:false}", () =>
   assert.deepEqual(W.parseStep('{"folders":["a"]}'), { folders: ["a"] });
   assert.deepEqual(W.parseStep(""), { ok: false, error: "no_output" });
   assert.deepEqual(W.parseStep("Traceback..."), { ok: false, error: "no_output" });
+});
+
+test("needsPreview: only two-way into a folder with someone else's files", () => {
+  assert.equal(W.needsPreview({ mode: "twoway", localCheck: { empty: false } }), true);
+  assert.equal(W.needsPreview({ mode: "twoway", localCheck: { empty: true } }), false);
+  assert.equal(W.needsPreview({ mode: "twoway", localCheck: { empty: false, ours: true } }), false);
+  assert.equal(W.needsPreview({ mode: "upload", localCheck: { empty: false } }), false);
 });

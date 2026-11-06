@@ -31,7 +31,7 @@ function canNext(page, draft) {
     case "mode":
         return MODES.indexOf(draft.mode) !== -1;
     case "preview":
-        return draft.firstSync === "match" || draft.firstSync === "merge";
+        return draft.firstSync === "another" || draft.firstSync === "match" || draft.firstSync === "merge";
     default:
         return false;
     }
@@ -62,6 +62,12 @@ function childPath(path, name) {
 function parentPath(path) {
     var i = (path || "").lastIndexOf("/");
     return i === -1 ? "" : path.slice(0, i);
+}
+
+// does the next step on the mode page compare the folder with Drive first?
+function needsPreview(draft) {
+    var chk = draft.localCheck || {};
+    return draft.mode === "twoway" && !chk.empty && !chk.ours;
 }
 
 // stdout of a gdrive-setup step

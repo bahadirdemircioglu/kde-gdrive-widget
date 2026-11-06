@@ -23,6 +23,19 @@ PlasmaExtras.Representation {
     readonly property var today: Status.todayCounts(m.recent, new Date(nowMs))
     readonly property var rows: syncing ? m.current : m.recent.slice(0, Plasmoid.configuration.recentCount)
     readonly property bool inPopup: plasmoidItem ? plasmoidItem.inPanel : false
+    readonly property bool showWizard: syncState === "unconfigured" || (plasmoidItem && plasmoidItem.wizardOpen)
+    readonly property bool showDisconnect: !showWizard && plasmoidItem && plasmoidItem.disconnectOpen
+    readonly property bool showStatus: !showWizard && !showDisconnect
+    readonly property bool configured: syncState !== "missing" && syncState !== "unconfigured"
+    // conflicts of the last 7 days: their older copies are in the backup folder
+    readonly property int recentConflicts: m.recent.filter(c => c.kind === "conflict" && nowMs - Date.parse(c.at) < 7 * 86400000).length
+
+    function openWizard() {
+        if (plasmoidItem) {
+            plasmoidItem.disconnectOpen = false;
+            plasmoidItem.wizardOpen = true;
+        }
+    }
 
     Layout.preferredWidth: Kirigami.Units.gridUnit * 22
     Layout.preferredHeight: Kirigami.Units.gridUnit * 28
@@ -54,11 +67,20 @@ PlasmaExtras.Representation {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                Kirigami.Heading {
+                RowLayout {
                     Layout.fillWidth: true
-                    level: 3
-                    text: Lang.i18n("Google Drive")
-                    elide: Text.ElideRight
+                    Kirigami.Heading {
+                        level: 3
+                        text: Lang.i18n("Google Drive")
+                        elide: Text.ElideRight
+                    }
+                    PlasmaComponents3.Label {
+                        Layout.fillWidth: true
+                        visible: full.configured
+                        text: "· " + Texts.modeLabel(full.m.mode)
+                        opacity: 0.7
+                        elide: Text.ElideRight
+                    }
                 }
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
@@ -66,6 +88,36 @@ PlasmaExtras.Representation {
                     color: full.stateColor(full.syncState)
                     font.weight: Font.DemiBold
                     elide: Text.ElideRight
+                }
+            }
+            PlasmaComponents3.ToolButton {
+                id: menuButton
+                visible: full.configured && full.showStatus
+                icon.name: "application-menu"
+                display: PlasmaComponents3.AbstractButton.IconOnly
+                text: Lang.i18n("More")
+                PlasmaComponents3.ToolTip.text: text
+                PlasmaComponents3.ToolTip.visible: hovered && !moreMenu.visible
+                onClicked: moreMenu.popup(menuButton, 0, menuButton.height)
+                PlasmaComponents3.Menu {
+                    id: moreMenu
+                    PlasmaComponents3.MenuItem {
+                        icon.name: "configure"
+                        text: Lang.i18n("Change setup…")
+                        onTriggered: full.openWizard()
+                    }
+                    PlasmaComponents3.MenuItem {
+                        icon.name: "document-open-folder"
+                        text: Lang.i18n("Open kept copies")
+                        enabled: full.m.backupDir !== ""
+                        onTriggered: full.source.open("mkdir -p " + Status.shellQuote(full.m.backupDir) + " && xdg-open " + Status.shellQuote(full.m.backupDir))
+                    }
+                    PlasmaComponents3.MenuSeparator {}
+                    PlasmaComponents3.MenuItem {
+                        icon.name: "network-disconnect"
+                        text: Lang.i18n("Disconnect…")
+                        onTriggered: full.plasmoidItem.disconnectOpen = true
+                    }
                 }
             }
             PlasmaComponents3.ToolButton {
@@ -80,8 +132,62 @@ PlasmaExtras.Representation {
     }
 
     contentItem: Item {
+      Loader {
+        anchors.fill: parent
+        anchors.margins: Kirigami.Units.largeSpacing
+        active: full.showWizard
+        sourceComponent: SetupWizard {
+            source: full.source
+            closable: full.syncState !== "unconfigured"
+            onCloseRequested: full.plasmoidItem.wizardOpen = false
+        }
+      }
+
+      // ---- disconnect ----
       ColumnLayout {
         anchors.fill: parent
+        anchors.margins: Kirigami.Units.largeSpacing
+        visible: full.showDisconnect
+        spacing: Kirigami.Units.largeSpacing
+        Kirigami.Heading {
+            Layout.fillWidth: true
+            level: 3
+            text: Lang.i18n("Disconnect Google Drive?")
+            wrapMode: Text.Wrap
+        }
+        PlasmaComponents3.Label {
+            Layout.fillWidth: true
+            text: Lang.i18n("Syncing stops. The files in %1 stay where they are and nothing changes on Drive. You can set it up again at any time.", full.m.localRoot)
+            wrapMode: Text.Wrap
+        }
+        PlasmaComponents3.CheckBox {
+            id: deleteRemote
+            Layout.fillWidth: true
+            visible: full.m.createdRemote
+            checked: true
+            text: Lang.i18n("Also remove the Google sign-in from this computer")
+        }
+        Item { Layout.fillHeight: true }
+        RowLayout {
+            Layout.fillWidth: true
+            Item { Layout.fillWidth: true }
+            PlasmaComponents3.Button {
+                text: Lang.i18n("Cancel")
+                onClicked: full.plasmoidItem.disconnectOpen = false
+            }
+            PlasmaComponents3.Button {
+                icon.name: "network-disconnect"
+                text: Lang.i18n("Disconnect")
+                onClicked: full.source.setupStep(
+                    ["disconnect"].concat(deleteRemote.visible && deleteRemote.checked ? ["--delete-remote"] : []),
+                    function () { full.plasmoidItem.disconnectOpen = false; })
+            }
+        }
+      }
+
+      ColumnLayout {
+        anchors.fill: parent
+        visible: full.showStatus
         anchors.topMargin: Kirigami.Units.largeSpacing
         anchors.leftMargin: Kirigami.Units.largeSpacing
         anchors.rightMargin: Kirigami.Units.largeSpacing
@@ -94,7 +200,7 @@ PlasmaExtras.Representation {
             visible: full.syncState === "missing"
             icon.name: "state-warning"
             text: Lang.i18n("Sync helper not found")
-            explanation: Lang.i18n("The widget reads its status with this command:\n%1 show\n\nInstall the sync service with sync/install.sh from the widget's project, or change the command in the settings.",
+            explanation: Lang.i18n("The widget reads its status with this command:\n%1 show\n\nRun gdrive-setup in a terminal, or change the command in the settings.",
                                    Plasmoid.configuration.helperCommand)
         }
 
@@ -147,11 +253,43 @@ PlasmaExtras.Representation {
             progress: full.m.progress
         }
 
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: full.configured && full.recentConflicts > 0 && !full.syncing
+            type: Kirigami.MessageType.Information
+            text: Lang.i18np("%1 file was changed on both sides; the older copy was kept aside.",
+                             "%1 files were changed on both sides; the older copies were kept aside.", full.recentConflicts)
+            actions: [
+                Kirigami.Action {
+                    icon.name: "document-open-folder"
+                    text: Lang.i18n("Open")
+                    onTriggered: full.source.open("mkdir -p " + Status.shellQuote(full.m.backupDir) + " && xdg-open " + Status.shellQuote(full.m.backupDir))
+                }
+            ]
+        }
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: full.configured && full.m.duplicates.length > 0 && !full.syncing
+            type: Kirigami.MessageType.Warning
+            text: Lang.i18np("%1 item has a duplicate name on Drive; only one of them is synced: %2",
+                             "%1 items have duplicate names on Drive; only one of each is synced: %2",
+                             full.m.duplicates.length, full.m.duplicates.slice(0, 3).join(", "))
+            actions: [
+                Kirigami.Action {
+                    icon.name: "internet-web-browser"
+                    text: Lang.i18n("Open Drive")
+                    onTriggered: Qt.openUrlExternally("https://drive.google.com/")
+                }
+            ]
+        }
+
         ErrorCard {
             Layout.fillWidth: true
             visible: full.syncState === "error"
+            onSetupRequested: full.openWizard()
             lastError: full.m.lastError
             lastSuccessAt: full.m.lastSuccessAt
+            remote: full.m.remote
             nowMs: full.nowMs
         }
 
@@ -193,7 +331,7 @@ PlasmaExtras.Representation {
 
     footer: PlasmaExtras.PlasmoidHeading {
         position: PlasmaComponents3.ToolBar.Footer
-        visible: full.syncState !== "missing"
+        visible: full.configured && full.showStatus
         contentItem: Flow {
             spacing: Kirigami.Units.smallSpacing
 

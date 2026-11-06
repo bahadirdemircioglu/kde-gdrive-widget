@@ -13,6 +13,9 @@ PlasmoidItem {
                                     || Plasmoid.formFactor === PlasmaCore.Types.Vertical
 
     preferredRepresentation: inPanel ? compactRepresentation : fullRepresentation
+    // the popup shows the setup wizard / the disconnect question instead of the status
+    property bool wizardOpen: false
+    property bool disconnectOpen: false
     readonly property string desktopBackground: Plasmoid.configuration.desktopBackground
     Plasmoid.backgroundHints: desktopBackground === "translucent" ? PlasmaCore.Types.TranslucentBackground
         : desktopBackground === "none" ? PlasmaCore.Types.NoBackground
@@ -45,8 +48,27 @@ PlasmoidItem {
         PlasmaCore.Action {
             text: status.model.serviceActive ? Lang.i18n("Pause syncing") : Lang.i18n("Resume syncing")
             icon.name: status.model.serviceActive ? "media-playback-pause" : "media-playback-start"
-            enabled: status.syncState !== "missing"
+            enabled: status.syncState !== "missing" && status.syncState !== "unconfigured"
             onTriggered: status.act(status.model.serviceActive ? "pause" : "resume")
+        },
+        PlasmaCore.Action {
+            text: status.syncState === "unconfigured" ? Lang.i18n("Set up…") : Lang.i18n("Change setup…")
+            icon.name: "configure"
+            onTriggered: {
+                root.disconnectOpen = false;
+                root.wizardOpen = status.syncState !== "unconfigured";
+                root.expanded = true;
+            }
+        },
+        PlasmaCore.Action {
+            text: Lang.i18n("Disconnect…")
+            icon.name: "network-disconnect"
+            visible: status.syncState !== "unconfigured" && status.syncState !== "missing"
+            onTriggered: {
+                root.wizardOpen = false;
+                root.disconnectOpen = true;
+                root.expanded = true;
+            }
         },
         PlasmaCore.Action {
             text: Lang.i18n("Open Google Drive in the browser")

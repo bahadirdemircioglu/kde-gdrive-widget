@@ -109,6 +109,7 @@ function parseShow(text) {
         mode: MODES.indexOf(d.mode) !== -1 ? d.mode : "twoway",
         backupDir: _str(d.backupDir),
         remotePath: _str(d.remotePath),
+        remote: _str(d.remote),
         createdRemote: d.createdRemote === true,
         duplicates: Array.isArray(d.duplicates) ? d.duplicates.filter(function (x) { return typeof x === "string"; }) : [],
         checks: _checks(d.checks),
@@ -163,7 +164,7 @@ function todayCounts(recent, nowDate) {
             out.up++;
         } else if (c.kind === "down") {
             out.down++;
-        } else {
+        } else if (c.kind === "deleted_remote" || c.kind === "deleted_local") {
             out.deleted++;
         }
     });

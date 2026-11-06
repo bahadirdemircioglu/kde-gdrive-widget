@@ -65,6 +65,8 @@ LOCAL = env("GDRIVE_LOCAL", (SETTINGS or {}).get("local") or os.path.join(HOME, 
 MODE = env("GDRIVE_MODE", (SETTINGS or {}).get("mode") or "twoway")
 REMOTE_PATH = (gc.split_remote(os.environ["GDRIVE_REMOTE"])[1] if os.environ.get("GDRIVE_REMOTE")
                else (SETTINGS or {}).get("remotePath", ""))
+REMOTE = (gc.split_remote(os.environ["GDRIVE_REMOTE"])[0] if os.environ.get("GDRIVE_REMOTE")
+          else (SETTINGS or {}).get("remote", "gdrive:"))
 BACKUP_DIR = gc.paths()["conflicts"]
 SKIP_DIRS = {".venv", "__pycache__", "node_modules"}
 STATE = env("GDRIVE_STATE", os.path.join(HOME, ".local/state/gdrive-sync"))
@@ -357,7 +359,7 @@ def cmd_show():
     active = service_active()
     out = dict(st) if st.get("state") else {"state": "missing"}
     out.update(serviceActive=active, localRoot=LOCAL, logPath=LOG, mode=MODE, backupDir=BACKUP_DIR,
-               remotePath=REMOTE_PATH, setup=setup_view(), createdRemote=bool((SETTINGS or {}).get("createdRemote")))
+               remotePath=REMOTE_PATH, remote=REMOTE, setup=setup_view(), createdRemote=bool((SETTINGS or {}).get("createdRemote")))
     if out["state"] == "syncing":
         if not active:
             out["state"] = "paused"

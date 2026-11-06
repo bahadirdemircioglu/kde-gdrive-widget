@@ -12,10 +12,13 @@ Rectangle {
 
     property var lastError: null
     property string lastSuccessAt: ""
+    property string remote: ""
     property double nowMs: Date.now()
 
     readonly property string code: Status.errorCode(lastError)
     readonly property var lines: lastError ? lastError.lines : []
+
+    signal setupRequested()
 
     implicitHeight: body.implicitHeight + Kirigami.Units.largeSpacing * 2
     radius: Kirigami.Units.cornerRadius
@@ -45,14 +48,20 @@ Rectangle {
             text: Lang.i18n("What to do: %1", Texts.errorAdvice(card.code))
             wrapMode: Text.Wrap
         }
+        PlasmaComponents3.Button {
+            visible: card.code === "not_initialized"
+            icon.name: "configure"
+            text: Lang.i18n("Set up again…")
+            onClicked: card.setupRequested()
+        }
         RowLayout {
             Layout.fillWidth: true
-            visible: Texts.errorCommand(card.code) !== ""
+            visible: Texts.errorCommand(card.code, card.remote) !== ""
             PlasmaComponents3.TextField {
                 id: commandField
                 Layout.fillWidth: true
                 readOnly: true
-                text: Texts.errorCommand(card.code)
+                text: Texts.errorCommand(card.code, card.remote)
                 font.family: "monospace"
             }
             PlasmaComponents3.ToolButton {

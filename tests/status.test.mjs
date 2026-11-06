@@ -52,7 +52,7 @@ test("todayCounts: only today's local date, deletes summed", () => {
   const recent = [
     { kind: "up", at: at(6, 9) }, { kind: "up", at: at(6, 13) }, { kind: "down", at: at(6, 1) },
     { kind: "deleted_remote", at: at(6, 2) }, { kind: "deleted_local", at: at(6, 3) },
-    { kind: "up", at: at(5, 23) },
+    { kind: "up", at: at(5, 23) }, { kind: "conflict", at: at(6, 4) },
   ];
   assert.deepEqual(S.todayCounts(recent, now), { up: 2, down: 1, deleted: 2 });
   assert.deepEqual(S.todayCounts([], now), { up: 0, down: 0, deleted: 0 });
