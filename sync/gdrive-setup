@@ -100,6 +100,50 @@ def load_setup():
         return None
 
 
+def save_setup(data):
+    gc.atomic_write(gc.paths()["setupJson"], json.dumps(data, ensure_ascii=False, indent=1))
+
+
+def update_setup(**changes):
+    data = load_setup() or {}
+    data.update(changes)
+    save_setup(data)
+    return data
+
+
+def now_iso():
+    return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+REMOTE_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*:?$")
+FORWARD_ENV = ["PATH", "DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR",
+               "XDG_CONFIG_HOME", "XDG_CURRENT_DESKTOP", "BROWSER", "LANG", "LANGUAGE"]
+
+
+def start_detached(step, args):
+    """Runs 'gdrive-setup <step>-run ...' as a transient user unit: it survives a Plasma
+    restart and the widget does not have to wait for it."""
+    unit = f"gdrive-setup-{step}"
+    systemctl("stop", f"{unit}.service")
+    systemctl("reset-failed", f"{unit}.service")
+    exe = os.environ.get("GDRIVE_SYSTEMD_RUN") or "systemd-run"
+    env = [f"--setenv={k}={v}" for k, v in os.environ.items()
+           if (k in FORWARD_ENV or k.startswith("GDRIVE_") or k.startswith("RCLONE_")) and "\n" not in v]
+    cmd = [exe, "--user", f"--unit={unit}", "--collect", "--quiet", *env,
+           sys.executable or "python3", os.path.join(HERE, "gdrive-setup"), f"{step}-run", *args]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise StepError("systemd", str(e))
+    if p.returncode != 0:
+        raise StepError("systemd", (p.stderr or "").strip() or "systemd-run failed")
+    return f"{unit}.service"
+
+
+def fail_setup(code, message):
+    update_setup(state="failed", error={"code": code, "message": message}, finishedAt=now_iso())
+
+
 # ---------- short steps ----------
 
 def step_check():
@@ -182,6 +226,190 @@ def step_preview(remote, remote_path, local):
 
 def step_migrate():
     return {"migrated": gc.migrate_if_legacy()}
+
+
+# ---------- Google login (detached) ----------
+
+def remote_names():
+    p = rclone(["listremotes", "--long"], timeout=30)
+    out = {}
+    for line in p.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].endswith(":"):
+            out[parts[0]] = parts[1]
+    return out
+
+
+def step_connect(name):
+    if not REMOTE_NAME_RE.match(name):
+        raise StepError("bad_name", "use letters, digits, - _ .")
+    name = name.rstrip(":") + ":"
+    if name in remote_names():
+        raise StepError("name_taken", f"{name} already exists")
+    save_setup({"step": "connect", "state": "running", "unit": "gdrive-setup-connect.service",
+                "startedAt": now_iso(), "remote": name, "authUrl": None, "createdRemote": False,
+                "error": None})
+    start_detached("connect", [name])
+    return {"started": True}
+
+
+AUTH_URL_RE = re.compile(r"(http://127\.0\.0\.1:\d+/auth\?\S+)")
+
+
+def step_connect_run(name):
+    exe = os.environ.get("GDRIVE_RCLONE") or "rclone"
+    bare = name.rstrip(":")
+    try:
+        proc = subprocess.Popen([exe, "config", "create", bare, "drive", "scope=drive"],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    except OSError as e:
+        fail_setup("rclone_missing", str(e))
+        return 1
+    tail = []
+    for line in proc.stdout:
+        m = AUTH_URL_RE.search(line)
+        if m:
+            update_setup(authUrl=m.group(1))
+        tail = (tail + [line.strip()])[-5:]
+    rc = proc.wait()
+    if rc != 0:
+        rclone(["config", "delete", bare], timeout=30)  # no half-made connection left behind
+        fail_setup("auth", " ".join(l for l in tail if l) or "login failed")
+        return 1
+    update_setup(state="done", createdRemote=True, finishedAt=now_iso(), error=None)
+    return 0
+
+
+# ---------- first sync + service (detached) ----------
+
+FIRST_SYNC = ("empty", "match", "merge", "resume", "none")
+
+
+def validate_apply(remote, remote_path, local, mode, first):
+    if mode not in gc.MODES:
+        raise StepError("bad_mode", mode)
+    if first not in FIRST_SYNC:
+        raise StepError("bad_first_sync", first)
+    if not remote.endswith(":"):
+        raise StepError("bad_name", remote)
+    chk = step_check_local(local)
+    if not chk["ok"]:
+        raise StepError("local_" + chk["reason"], chk["path"])
+    if mode != "twoway":
+        return chk["path"], "none"
+    if first == "none" or (first == "empty" and not chk["empty"]) or (first == "resume" and not chk["ours"]):
+        raise StepError("needs_choice", "this folder already has files")
+    return chk["path"], first
+
+
+def step_apply(remote, remote_path, local, mode, first):
+    local, first = validate_apply(remote, remote_path, local, mode, first)
+    prev = load_setup() or {}
+    created = bool(prev.get("step") == "connect" and prev.get("state") == "done"
+                   and prev.get("remote") == remote and prev.get("createdRemote"))
+    current = gc.effective()
+    if current and current["remote"] == remote and current["createdRemote"]:
+        created = True
+    target = {"remote": remote, "remotePath": remote_path.strip("/"), "local": local, "mode": mode,
+              "firstSync": first, "createdRemote": created}
+    save_setup({"step": "apply", "state": "running", "unit": "gdrive-setup-apply.service",
+                "startedAt": now_iso(), "target": target, "error": None})
+    start_detached("apply", [remote, remote_path.strip("/"), local, mode, first])
+    return {"started": True}
+
+
+def run_sync(bin_dir, target, local, mode, resync):
+    env = dict(os.environ, GDRIVE_REMOTE=target, GDRIVE_LOCAL=local, GDRIVE_MODE=mode,
+               GDRIVE_STATS="10s")
+    args = ["bash", os.path.join(bin_dir, "gdrive-sync")] + (["--resync"] if resync else [])
+    return subprocess.run(args, env=env, capture_output=True, text=True).returncode
+
+
+def read_status(p):
+    try:
+        with open(os.path.join(p["state"], "status.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def step_apply_run(remote, remote_path, local, mode, first):
+    p = gc.paths()
+    setup = load_setup() or {}
+    created = bool((setup.get("target") or {}).get("createdRemote"))
+    target = target_of(remote, remote_path)
+    service = os.path.basename(p["unit"])
+    was_active = systemctl("is-active", "--quiet", service).returncode == 0
+    try:
+        if rclone(["lsd", target, "--max-depth", "1"], timeout=120).returncode != 0:
+            raise StepError("offline", "Google Drive could not be reached")
+        info = install_service(dev=os.environ.get("GDRIVE_DEV") == "1")
+        if was_active:
+            systemctl("stop", service)  # "Change setup": the old pair stops first
+        os.makedirs(local, exist_ok=True)
+        if mode == "twoway" and first == "match":
+            aside = os.path.join(p["share"], "set-aside-" + datetime.date.today().isoformat())
+            args = ["sync", target, local, "--backup-dir", aside, "--drive-export-formats", "desktop",
+                    "--create-empty-src-dirs", "--log-file", os.path.join(p["state"], "sync.log"),
+                    "--log-level", "INFO"]
+            if os.path.exists(p["filters"]):
+                args += ["--filters-file", p["filters"]]
+            if rclone(args, timeout=None).returncode != 0:
+                raise StepError("sync", "making the folder match Drive failed")
+            update_setup(setAside=aside)
+        before = (read_status(p).get("lastRunAt"), read_status(p).get("logOffset"))
+        if run_sync(info["binDir"], target, local, mode, resync=(mode == "twoway")) != 0:
+            raise StepError("sync", "the first sync failed; see the log")
+        st = read_status(p)
+        if st.get("state") != "synced" or (st.get("lastRunAt"), st.get("logOffset")) == before:
+            raise StepError("sync", f"the first sync did not finish ({st.get('state')})")
+        values = {"REMOTE": remote, "REMOTE_PATH": remote_path.strip("/"), "LOCAL": local, "MODE": mode}
+        if created:
+            values["CREATED_REMOTE"] = "1"
+        gc.write_config(p["config"], values)
+        r = systemctl("enable", "--now", service)
+        if r.returncode != 0:
+            raise StepError("systemd", (r.stderr or "").strip() or "the service did not start")
+    except StepError as e:
+        if was_active and gc.effective():
+            systemctl("start", service)  # the previous setup keeps running
+        fail_setup(e.code, e.message)
+        return 1
+    update_setup(state="done", finishedAt=now_iso(), error=None)
+    return 0
+
+
+def step_cancel():
+    setup = load_setup()
+    if not setup or setup.get("state") != "running":
+        return {"ok": True, "cancelled": False}
+    systemctl("stop", setup.get("unit") or f"gdrive-setup-{setup.get('step')}.service")
+    if setup.get("step") == "connect" and setup.get("remote"):
+        # an interrupted login leaves a half-made connection (the name was free before)
+        rclone(["config", "delete", setup["remote"].rstrip(":")], timeout=30)
+    update_setup(state="cancelled", finishedAt=now_iso())
+    return {"ok": True, "cancelled": True}
+
+
+def step_disconnect(delete_remote=False):
+    p = gc.paths()
+    current = gc.effective()
+    service = os.path.basename(p["unit"])
+    systemctl("disable", "--now", service)
+    backup = None
+    if os.path.exists(p["config"]):
+        backup = f"{p['config']}.bak-{datetime.datetime.now():%Y-%m-%d-%H%M%S}"
+        os.replace(p["config"], backup)
+    # without these a 0.1.0-style install would be "migrated" again
+    for f in (os.path.join(p["state"], "initialized"), p["unit"]):
+        if os.path.exists(f):
+            os.unlink(f)
+    systemctl("daemon-reload")
+    deleted = False
+    if delete_remote and current and current["createdRemote"]:
+        deleted = rclone(["config", "delete", current["remote"].rstrip(":")], timeout=30).returncode == 0
+    return {"ok": True, "configBackup": backup, "remoteDeleted": deleted}
 
 
 # ---------- service install ----------
@@ -288,6 +516,14 @@ def run_step(name, args, flags):
         return step_preview(*args)
     if name == "migrate":
         return step_migrate()
+    if name == "connect" and len(args) == 1:
+        return step_connect(args[0])
+    if name == "apply" and len(args) == 5:
+        return step_apply(*args)
+    if name == "cancel":
+        return step_cancel()
+    if name == "disconnect":
+        return step_disconnect(delete_remote="--delete-remote" in flags)
     if name == "install-service":
         return install_service(dev="--dev" in flags or os.environ.get("GDRIVE_DEV") == "1",
                                start="--start" in flags)
@@ -300,6 +536,10 @@ def main(argv):
     if not args:
         print(__doc__, file=sys.stderr)
         return 2
+    if args[0] == "connect-run" and len(args) == 2:
+        return step_connect_run(args[1])
+    if args[0] == "apply-run" and len(args) == 6:
+        return step_apply_run(*args[1:])
     try:
         result = run_step(args[0], args[1:], flags)
     except StepError as e:

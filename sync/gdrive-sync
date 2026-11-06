@@ -66,6 +66,7 @@ COMMON=(
   --transfers 8 --checkers 16
   --log-file "$LOG" --log-level INFO
 )
+[ -n "${GDRIVE_STATS:-}" ] && COMMON+=(--stats "$GDRIVE_STATS")   # ilk senkronda sik ilerleme
 BISYNC=(
   --create-empty-src-dirs
   --drive-export-formats desktop  # Google Dokumanlar tarayicida acilan .desktop kisayolu olur
@@ -95,7 +96,8 @@ case "$MODE" in
   *)
     if [ "$RESYNC" = 1 ]; then
       echo "$(date '+%F %T') === ELLE ISTENEN --resync ===" >>"$LOG"
-      if rclone bisync "$LOCAL" "$REMOTE" --resync "${BISYNC[@]}"; then
+      # farkli dosyada yeni olan kazanir, eskisi yedege gider (varsayilan: yerel kazanir)
+      if rclone bisync "$LOCAL" "$REMOTE" --resync --resync-mode newer "${BISYNC[@]}"; then
         touch "$STATE/initialized"
       else
         fail "--resync BASARISIZ"

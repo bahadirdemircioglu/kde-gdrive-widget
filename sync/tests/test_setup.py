@@ -14,7 +14,20 @@ SCRIPTS = ["gdrive-setup", "gdrive-sync", "gdrive-syncd", "gdrive-status", "gdri
 
 FAKE_RCLONE = r'''#!/bin/bash
 printf '%s|' "$@" >> "$CALLS/rclone"; echo >> "$CALLS/rclone"
+for a; do case "${prev:-}" in --log-file) log="$a";; esac; prev="$a"; done
 case "$1" in
+  config)
+    [ "$2" = create ] || exit 0
+    echo "NOTICE: If your browser doesn't open automatically go to the following link: http://127.0.0.1:53682/auth?state=abc" >&2
+    echo "NOTICE: Log in and authorize rclone for access" >&2
+    exit "${CONNECT_EXIT:-0}" ;;
+  bisync|copy|sync)
+    [ -n "${log:-}" ] && echo "x INFO  : Bisync successful" >> "$log"
+    if [ "$1" = sync ]; then  # imitate --backup-dir: local-only files move aside
+      for a; do case "${p2:-}" in --backup-dir) bk="$a";; esac; p2="$a"; done
+      mkdir -p "$bk"; [ -f "$3/only-here.txt" ] && mv "$3/only-here.txt" "$bk/"
+    fi
+    exit "${SYNC_EXIT:-0}" ;;
   version) echo "rclone v1.75.2" ;;
   listremotes) printf '%s\n' "${FAKE_REMOTES-gdrive:      drive}" ;;
   lsf) printf 'Belgeler/\nFotoğraflar ve Videolar/\n' ;;
@@ -44,7 +57,10 @@ class SetupBase(unittest.TestCase):
         self.fake("rclone", FAKE_RCLONE)
         self.fake("systemctl", '#!/bin/bash\necho "$*" >> "$CALLS/systemctl"\n'
                                'case "$*" in *is-active*) exit 3;; esac\nexit 0\n')
-        self.fake("systemd-run", '#!/bin/bash\necho "$*" >> "$CALLS/systemd-run"\nexit 0\n')
+        # runs the detached command inline, with its --setenv values
+        self.fake("systemd-run", '#!/bin/bash\necho "$*" >> "$CALLS/systemd-run"\n'
+                                 'while [[ "$1" == --* ]]; do case "$1" in --setenv=*) export "${1#--setenv=}";; esac; shift; done\n'
+                                 '"$@" > "$CALLS/detached.out" 2>&1\nexit 0\n')
         self.fake("loginctl", "#!/bin/bash\nexit 0\n")
         self.env = dict(os.environ, HOME=str(self.home), PATH=f"{self.bin}:/usr/bin:/bin",
                         CALLS=str(self.calls), XDG_RUNTIME_DIR=str(t / "run"))
@@ -186,6 +202,182 @@ class InstallServiceTest(SetupBase):
         r = self.setup("install-service")
         self.assertEqual((b / "gdrive-sync").read_text(), "mine")
         self.assertIn(str(b / "gdrive-sync"), r["skippedLinks"])
+
+
+class DetachedTest(SetupBase):
+    def setup_json(self):
+        return json.loads((self.state / "setup.json").read_text())
+
+    def config(self):
+        f = self.home / ".config/gdrive-sync/config"
+        return f.read_text() if f.exists() else None
+
+    def detached_out(self):
+        f = self.calls / "detached.out"
+        return f.read_text() if f.exists() else ""
+
+    def test_connect_runs_detached_with_display_env_and_records_url(self):
+        r = self.setup("connect", "gdrive:", DISPLAY=":0", WAYLAND_DISPLAY="wayland-0", FAKE_REMOTES="")
+        self.assertTrue(r["started"])
+        run = (self.calls / "systemd-run").read_text()
+        self.assertIn("--unit=gdrive-setup-connect", run)
+        self.assertIn("--setenv=WAYLAND_DISPLAY=wayland-0", run)
+        sj = self.setup_json()
+        self.assertEqual((sj["step"], sj["state"]), ("connect", "done"), self.detached_out())
+        self.assertEqual(sj["authUrl"], "http://127.0.0.1:53682/auth?state=abc")
+        self.assertTrue(sj["createdRemote"])
+        create = [c for c in self.rclone_calls() if c[:2] == ["config", "create"]][0]
+        self.assertEqual(create[2:5], ["gdrive", "drive", "scope=drive"])
+
+    def test_connect_failure_removes_half_created_remote(self):
+        self.setup("connect", "gdrive:", CONNECT_EXIT="1", FAKE_REMOTES="")
+        self.assertEqual(self.setup_json()["state"], "failed")
+        self.assertTrue([c for c in self.rclone_calls() if c[:3] == ["config", "delete", "gdrive"]])
+
+    def test_connect_refuses_a_name_that_is_taken(self):
+        r = self.setup("connect", "work:", FAKE_REMOTES="work:   s3")
+        self.assertEqual(r["error"], "name_taken")
+
+    def test_apply_twoway_into_empty_folder(self):
+        local = self.home / "Google Drive"
+        r = self.setup("apply", "gdrive:", "", str(local), "twoway", "empty")
+        self.assertTrue(r["started"])
+        sj = self.setup_json()
+        self.assertEqual(sj["state"], "done", self.detached_out())
+        calls = self.rclone_calls()
+        bisync = [c for c in calls if c[0] == "bisync"]
+        self.assertEqual(len(bisync), 1)
+        self.assertIn("--resync", bisync[0])
+        self.assertEqual(bisync[0][1:3], [str(local), "gdrive:"])
+        self.assertFalse([c for c in calls if c[0] == "sync"])
+        self.assertIn(f"LOCAL={local}\n", self.config())
+        self.assertIn("MODE=twoway\n", self.config())
+        self.assertTrue((self.state / "initialized").exists())
+        self.assertIn("--user enable --now gdrive-sync.service", self.systemctl_calls())
+
+    def test_apply_match_moves_local_only_files_aside_first(self):
+        local = self.home / "GD"
+        local.mkdir()
+        (local / "only-here.txt").write_text("x")
+        self.setup("apply", "gdrive:", "Belgeler", str(local), "twoway", "match")
+        self.assertEqual(self.setup_json()["state"], "done", self.detached_out())
+        verbs = [c[0] for c in self.rclone_calls() if c[0] in ("sync", "bisync")]
+        self.assertEqual(verbs, ["sync", "bisync"])
+        sync = [c for c in self.rclone_calls() if c[0] == "sync"][0]
+        self.assertEqual(sync[1:3], ["gdrive:Belgeler", str(local)])
+        aside = list((self.home / ".local/share/gdrive-sync").glob("set-aside-*/only-here.txt"))
+        self.assertEqual(len(aside), 1)
+        self.assertIn("REMOTE_PATH=Belgeler\n", self.config())
+
+    def test_apply_refuses_empty_choice_for_a_full_folder(self):
+        local = self.home / "GD"
+        local.mkdir()
+        (local / "a.txt").write_text("x")
+        r = self.setup("apply", "gdrive:", "", str(local), "twoway", "empty")
+        self.assertEqual(r["error"], "needs_choice")
+        self.assertFalse((self.calls / "systemd-run").exists())
+
+    def test_apply_one_way_modes(self):
+        for mode, verb_order in (("download", ["gdrive:", None]), ("upload", [None, "gdrive:"])):
+            with self.subTest(mode=mode):
+                (self.calls / "rclone").unlink(missing_ok=True)
+                local = self.home / f"GD-{mode}"
+                self.setup("apply", "gdrive:", "", str(local), mode, "none")
+                self.assertEqual(self.setup_json()["state"], "done", self.detached_out())
+                copy = [c for c in self.rclone_calls() if c[0] == "copy"][0]
+                self.assertEqual(copy[1:3], ["gdrive:", str(local)] if mode == "download" else [str(local), "gdrive:"])
+                self.assertFalse([c for c in self.rclone_calls() if c[0] == "bisync"])
+                self.assertIn(f"MODE={mode}\n", self.config())
+
+    def test_failed_first_sync_writes_no_config_and_enables_nothing(self):
+        self.setup("apply", "gdrive:", "", str(self.home / "GD"), "twoway", "empty", SYNC_EXIT="2")
+        sj = self.setup_json()
+        self.assertEqual(sj["state"], "failed")
+        self.assertIsNone(self.config())
+        self.assertNotIn("enable", self.systemctl_calls())
+        self.assertTrue(self.setup("check-local", str(self.home / "GD"))["ours"])
+
+    def test_offline_apply_fails(self):
+        self.setup("apply", "gdrive:", "", str(self.home / "GD"), "download", "none", LSD_EXIT="1")
+        self.assertEqual(self.setup_json()["error"]["code"], "offline")
+        self.assertIsNone(self.config())
+
+    def test_created_remote_is_recorded_from_connect(self):
+        self.setup("connect", "gdrive:", FAKE_REMOTES="")
+        self.setup("apply", "gdrive:", "", str(self.home / "GD"), "download", "none")
+        self.assertIn("CREATED_REMOTE=1\n", self.config())
+
+    def test_cancel_marks_cancelled_and_keeps_target(self):
+        self.state.mkdir(parents=True)
+        (self.state / "setup.json").write_text(json.dumps(
+            {"step": "apply", "state": "running", "unit": "gdrive-setup-apply.service",
+             "target": {"local": str(self.home / "GD")}}))
+        r = self.setup("cancel")
+        self.assertTrue(r["ok"])
+        self.assertIn("--user stop gdrive-setup-apply.service", self.systemctl_calls())
+        self.assertEqual(self.setup_json()["state"], "cancelled")
+        self.assertTrue(self.setup("check-local", str(self.home / "GD"))["ours"])
+
+    def test_cancelled_login_removes_the_half_made_connection(self):
+        self.state.mkdir(parents=True)
+        (self.state / "setup.json").write_text(json.dumps(
+            {"step": "connect", "state": "running", "unit": "gdrive-setup-connect.service", "remote": "gdrive:"}))
+        self.setup("cancel")
+        self.assertIn("--user stop gdrive-setup-connect.service", self.systemctl_calls())
+        self.assertTrue([c for c in self.rclone_calls() if c[:3] == ["config", "delete", "gdrive"]])
+
+    def test_disconnect_keeps_files_and_foreign_remote(self):
+        local = self.home / "GD"
+        local.mkdir()
+        (local / "a.txt").write_text("x")
+        self.write_config(local)
+        self.state.mkdir(parents=True)
+        (self.state / "initialized").touch()
+        unit = self.home / ".config/systemd/user/gdrive-sync.service"
+        unit.parent.mkdir(parents=True)
+        unit.write_text("[Service]\n")
+        r = self.setup("disconnect", "--delete-remote")
+        self.assertTrue(r["ok"])
+        self.assertFalse(r["remoteDeleted"])
+        self.assertTrue((local / "a.txt").exists())
+        self.assertIsNone(self.config())
+        self.assertTrue(list((self.home / ".config/gdrive-sync").glob("config.bak-*")))
+        self.assertFalse((self.state / "initialized").exists())
+        self.assertFalse(unit.exists())
+        self.assertIn("--user disable --now gdrive-sync.service", self.systemctl_calls())
+        self.assertFalse([c for c in self.rclone_calls() if c[:2] == ["config", "delete"]])
+        # no silent re-migration afterwards
+        self.assertFalse(self.setup("migrate")["migrated"])
+
+    def test_disconnect_deletes_remote_created_by_setup_only_when_asked(self):
+        self.write_config(self.home / "GD", extra="CREATED_REMOTE=1\n")
+        r = self.setup("disconnect", "--delete-remote")
+        self.assertTrue(r["remoteDeleted"])
+        self.assertTrue([c for c in self.rclone_calls() if c[:3] == ["config", "delete", "gdrive"]])
+
+
+class ShowSetupTest(SetupBase):
+    def show(self):
+        p = subprocess.run([sys.executable, str(self.src / "gdrive-status"), "show"],
+                           env=dict(self.env, GDRIVE_SYSTEMCTL=str(self.bin / "systemctl")),
+                           capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return json.loads(p.stdout)
+
+    def test_running_setup_whose_unit_is_gone_is_interrupted(self):
+        self.state.mkdir(parents=True)
+        (self.state / "setup.json").write_text(json.dumps(
+            {"step": "apply", "state": "running", "unit": "gdrive-setup-apply.service"}))
+        s = self.show()
+        self.assertEqual(s["state"], "unconfigured")
+        self.assertEqual(s["setup"]["state"], "failed")
+        self.assertEqual(s["setup"]["error"]["code"], "interrupted")
+
+    def test_setup_is_reported_when_configured_too(self):
+        self.write_config(self.home / "GD")
+        self.state.mkdir(parents=True)
+        (self.state / "setup.json").write_text(json.dumps({"step": "apply", "state": "done"}))
+        self.assertEqual(self.show()["setup"]["state"], "done")
 
 
 if __name__ == "__main__":

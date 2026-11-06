@@ -297,20 +297,54 @@ def load_json(path):
         return None
 
 
+def unit_active(unit):
+    try:
+        p = subprocess.run([SYSTEMCTL, "--user", "is-active", "--quiet", unit],
+                           capture_output=True, timeout=5)
+        return p.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _age_seconds(iso):
+    try:
+        return (datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(iso)).total_seconds()
+    except (TypeError, ValueError):
+        return 1e9
+
+
+def setup_view():
+    """setup.json as the widget should see it: a 'running' step whose unit is gone (reboot,
+    crash) is reported as failed; a running first sync gets the live progress."""
+    data = load_json(gc.paths()["setupJson"])
+    if not data or data.get("state") != "running":
+        return data
+    unit = data.get("unit") or f"gdrive-setup-{data.get('step')}.service"
+    if not unit_active(unit) and _age_seconds(data.get("startedAt")) > 10:
+        return dict(data, state="failed", error={"code": "interrupted", "message": "setup was interrupted"})
+    if data.get("step") == "apply":
+        st = load_status()
+        target = data.get("target") or {}
+        if st.get("state") == "syncing" and (st.get("runStartedAt") or "") >= (data.get("startedAt") or ""):
+            run = parse_run(read_run_log(int(st.get("logOffset") or 0)), target.get("local") or LOCAL,
+                            target.get("mode") or "twoway", target.get("remotePath") or "")
+            data.update(phase=run["phase"] or "listing", progress=run["progress"])
+    return data
+
+
 def cmd_show():
     paths = gc.paths()
     if not os.path.exists(paths["config"]):
         gc.migrate_if_legacy()
         if gc.effective() is None:
-            print(json.dumps({"state": "unconfigured", "checks": gc.checks(),
-                              "setup": load_json(paths["setupJson"]),
+            print(json.dumps({"state": "unconfigured", "checks": gc.checks(), "setup": setup_view(),
                               "serviceActive": service_active()}, ensure_ascii=False))
             return
     st = load_status()
     active = service_active()
     out = dict(st) if st.get("state") else {"state": "missing"}
     out.update(serviceActive=active, localRoot=LOCAL, logPath=LOG, mode=MODE, backupDir=BACKUP_DIR,
-               remotePath=REMOTE_PATH)
+               remotePath=REMOTE_PATH, setup=setup_view(), createdRemote=bool((SETTINGS or {}).get("createdRemote")))
     if out["state"] == "syncing":
         if not active:
             out["state"] = "paused"
