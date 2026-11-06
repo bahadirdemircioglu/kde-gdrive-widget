@@ -56,7 +56,8 @@ class SetupBase(unittest.TestCase):
         self.bin.mkdir()
         self.fake("rclone", FAKE_RCLONE)
         self.fake("systemctl", '#!/bin/bash\necho "$*" >> "$CALLS/systemctl"\n'
-                               'case "$*" in *is-active*) exit 3;; esac\nexit 0\n')
+                               'case "$*" in *is-active*gdrive-sync.service*) [ -n "${FAKE_ACTIVE:-}" ] && exit 0; exit 3;;'
+                               ' *is-active*) exit 3;; esac\nexit 0\n')
         # runs the detached command inline, with its --setenv values
         self.fake("systemd-run", '#!/bin/bash\necho "$*" >> "$CALLS/systemd-run"\n'
                                  'while [[ "$1" == --* ]]; do case "$1" in --setenv=*) export "${1#--setenv=}";; esac; shift; done\n'
@@ -121,7 +122,8 @@ class ShortStepsTest(SetupBase):
         f.write_text("x")
         cases = {"/": "root", str(self.home): "home", str(self.home.parent): "home",
                  str(f): "file", str(self.home / "GoogleDrive/Sub"): "nested",
-                 str(self.home / ".local/state"): "state", str(self.home / ".local/share/gdrive-sync/x"): "state"}
+                 str(self.home / ".local/state"): "state", str(self.home / ".local/share/gdrive-sync/x"): "state",
+                 "/home/kullanici-yok/GoogleDrive": "not_writable"}
         for path, reason in cases.items():
             with self.subTest(path=path):
                 r = self.setup("check-local", path)
@@ -296,6 +298,30 @@ class DetachedTest(SetupBase):
         self.assertIsNone(self.config())
         self.assertNotIn("enable", self.systemctl_calls())
         self.assertTrue(self.setup("check-local", str(self.home / "GD"))["ours"])
+
+    def test_folder_that_cannot_be_created_is_refused_before_anything_runs(self):
+        ro = self.t / "ro"
+        ro.mkdir()
+        ro.chmod(0o500)
+        self.addCleanup(ro.chmod, 0o700)
+        r = self.setup("apply", "gdrive:", "", str(ro / "GD"), "twoway", "empty", FAKE_ACTIVE="1")
+        self.assertEqual(r["error"], "local_not_writable")
+        self.assertFalse((self.calls / "systemd-run").exists())
+        self.assertNotIn("stop gdrive-sync.service", self.systemctl_calls())
+
+    def test_failed_first_sync_restarts_the_previous_service(self):
+        self.setup("apply", "gdrive:", "", str(self.home / "GD"), "twoway", "empty", FAKE_ACTIVE="1", SYNC_EXIT="2")
+        self.assertEqual(self.setup_json()["state"], "failed")
+        calls = self.systemctl_calls()
+        self.assertLess(calls.index("--user stop gdrive-sync.service"), calls.index("--user start gdrive-sync.service"))
+        self.assertNotIn("enable", calls)
+
+    def test_nothing_is_installed_before_the_first_sync_succeeded(self):
+        self.setup("apply", "gdrive:", "", str(self.home / "GD"), "twoway", "empty", SYNC_EXIT="2")
+        self.assertEqual(self.setup_json()["state"], "failed")
+        self.assertFalse((self.home / ".config/systemd/user/gdrive-sync.service").exists())
+        self.assertFalse((self.home / ".local/bin/gdrive-status").exists())
+        self.assertFalse((self.home / ".local/share/gdrive-sync/bin").exists())
 
     def test_offline_apply_fails(self):
         self.setup("apply", "gdrive:", "", str(self.home / "GD"), "download", "none", LSD_EXIT="1")

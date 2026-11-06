@@ -164,6 +164,7 @@ var CATALOGS = {
             "Where should the files appear on this computer?": "Dosyalar bu bilgisayarda nerede görünsün?",
             "Which Google account should be synced?": "Hangi Google hesabı senkronlansın?",
             "You can close this; the setup keeps running in the background.": "Bunu kapatabilirsiniz; kurulum arka planda sürer.",
+            "You cannot create or change files there.": "Oraya dosya oluşturamaz ya da değiştiremezsiniz.",
             "Your browser opens Google's sign-in page. rclone keeps the access key on this computer only.": "Tarayıcınız Google'ın giriş sayfasını açar. rclone erişim anahtarını yalnızca bu bilgisayarda tutar.",
             "Your computer and Drive records don't match": "Bilgisayar ile Drive'ın kayıtları uyuşmuyor",
             "file in a running sync\u0004done": "tamam",

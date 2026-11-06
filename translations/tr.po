@@ -93,7 +93,8 @@ msgid "Choose…"
 msgstr "Seç…"
 
 msgid "Click a folder to open it; the folder shown above is synced."
-msgstr "Açmak için bir klasöre tıklayın; yukarıda gösterilen klasör senkronlanır."
+msgstr ""
+"Açmak için bir klasöre tıklayın; yukarıda gösterilen klasör senkronlanır."
 
 msgid "Close"
 msgstr "Kapat"
@@ -556,6 +557,9 @@ msgstr "Hangi Google hesabı senkronlansın?"
 
 msgid "You can close this; the setup keeps running in the background."
 msgstr "Bunu kapatabilirsiniz; kurulum arka planda sürer."
+
+msgid "You cannot create or change files there."
+msgstr "Oraya dosya oluşturamaz ya da değiştiremezsiniz."
 
 msgid ""
 "Your browser opens Google's sign-in page. rclone keeps the access key on this computer only."

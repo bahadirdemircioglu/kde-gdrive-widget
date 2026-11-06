@@ -153,6 +153,14 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 
 - [x] Screenshots: isolated preview copy (own plugin id, helper = `cat` of fixture files), one window, 12 states; preview package and its window config removed afterwards.
 
+### Incident during Task 9 (2026-11-06 15:03) and fixes
+
+The preview copy ran the real `gdrive-setup` for its wizard steps. A click on "Start syncing" in the preview window started a real `apply` with the fixture folder `/home/kullanici/GoogleDrive`: it rewrote the live unit and links, stopped the live service, then crashed on `PermissionError` (nothing was synced; Drive and `~/GoogleDrive` untouched). Restored by hand (unit from `.bak`, links to the checkout, copied scripts, setup.json and config moved to the scratchpad), service restarted. Fixes, with tests:
+- [x] `apply-run`: first sync runs from the scripts next to `gdrive-setup`; scripts, unit, links and config are installed **only after** it succeeded; the old service is stopped only right before the first sync and restarted on **any** exception (`unexpected`).
+- [x] `check-local` refuses a folder that cannot be created/written (`not_writable`), so `apply` never starts for it.
+- [x] `gdrive-sync` calls the status helper via `python3` (lost exec bits in a plasmoid).
+- [x] Lesson: a preview harness must stub every command with side effects, not only the status helper.
+
 ### Task 10: End to end, release, live migration
 
 - [ ] E2E with real rclone and the existing `gdrive:` remote, temp `HOME` (copy of `rclone.conf` only), `REMOTE_PATH=_gdrive-sync-e2e-…` (created with two files), fake systemctl: `apply … twoway empty` → local equals Drive byte-level (`rclone lsf -R` both sides + `comm`, no `.conflict`, no extra files); then purge the scratch folder.

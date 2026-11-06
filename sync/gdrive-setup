@@ -175,6 +175,16 @@ def step_drive_folders(remote, path=""):
     return {"folders": sorted(folders, key=str.casefold)}
 
 
+def writable(path):
+    """The folder, or the nearest existing folder above it, can be written to."""
+    while not os.path.exists(path):
+        parent = os.path.dirname(path)
+        if parent == path:
+            return False
+        path = parent
+    return os.path.isdir(path) and os.access(path, os.W_OK | os.X_OK)
+
+
 def step_check_local(path):
     path = norm_path(path)
     p = gc.paths()
@@ -189,6 +199,8 @@ def step_check_local(path):
         reason = "file"
     elif any(inside(path, norm_path(d)) or inside(norm_path(d), path) for d in (p["state"], p["share"])):
         reason = "state"
+    elif not writable(path):
+        reason = "not_writable"
     elif current and path != norm_path(current["local"]) and (
             inside(path, norm_path(current["local"])) or inside(norm_path(current["local"]), path)):
         reason = "nested"
@@ -335,19 +347,25 @@ def read_status(p):
 
 
 def step_apply_run(remote, remote_path, local, mode, first):
+    """First sync, then (only after it succeeded) scripts, unit, config and service.
+    Any failure leaves the previous setup as it was and running."""
     p = gc.paths()
     setup = load_setup() or {}
     created = bool((setup.get("target") or {}).get("createdRemote"))
     target = target_of(remote, remote_path)
     service = os.path.basename(p["unit"])
     was_active = systemctl("is-active", "--quiet", service).returncode == 0
+    stopped = False
     try:
         if rclone(["lsd", target, "--max-depth", "1"], timeout=120).returncode != 0:
             raise StepError("offline", "Google Drive could not be reached")
-        info = install_service(dev=os.environ.get("GDRIVE_DEV") == "1")
+        try:
+            os.makedirs(local, exist_ok=True)
+        except OSError as e:
+            raise StepError("local_create", f"{local}: {e.strerror}")
         if was_active:
-            systemctl("stop", service)  # "Change setup": the old pair stops first
-        os.makedirs(local, exist_ok=True)
+            systemctl("stop", service)  # "Change setup": the old pair must not run meanwhile
+            stopped = True
         if mode == "twoway" and first == "match":
             aside = os.path.join(p["share"], "set-aside-" + datetime.date.today().isoformat())
             args = ["sync", target, local, "--backup-dir", aside, "--drive-export-formats", "desktop",
@@ -359,11 +377,13 @@ def step_apply_run(remote, remote_path, local, mode, first):
                 raise StepError("sync", "making the folder match Drive failed")
             update_setup(setAside=aside)
         before = (read_status(p).get("lastRunAt"), read_status(p).get("logOffset"))
-        if run_sync(info["binDir"], target, local, mode, resync=(mode == "twoway")) != 0:
+        # the first sync runs the scripts next to this file; nothing is installed yet
+        if run_sync(HERE, target, local, mode, resync=(mode == "twoway")) != 0:
             raise StepError("sync", "the first sync failed; see the log")
         st = read_status(p)
         if st.get("state") != "synced" or (st.get("lastRunAt"), st.get("logOffset")) == before:
             raise StepError("sync", f"the first sync did not finish ({st.get('state')})")
+        install_service(dev=os.environ.get("GDRIVE_DEV") == "1")
         values = {"REMOTE": remote, "REMOTE_PATH": remote_path.strip("/"), "LOCAL": local, "MODE": mode}
         if created:
             values["CREATED_REMOTE"] = "1"
@@ -371,10 +391,15 @@ def step_apply_run(remote, remote_path, local, mode, first):
         r = systemctl("enable", "--now", service)
         if r.returncode != 0:
             raise StepError("systemd", (r.stderr or "").strip() or "the service did not start")
-    except StepError as e:
-        if was_active and gc.effective():
-            systemctl("start", service)  # the previous setup keeps running
-        fail_setup(e.code, e.message)
+        if stopped:
+            systemctl("restart", service)  # picks up the new unit and config
+    except Exception as e:  # noqa: BLE001 - whatever happened, the old setup must come back
+        if stopped:
+            systemctl("start", service)
+        if isinstance(e, StepError):
+            fail_setup(e.code, e.message)
+        else:
+            fail_setup("unexpected", f"{type(e).__name__}: {e}")
         return 1
     update_setup(state="done", finishedAt=now_iso(), error=None)
     return 0
@@ -524,7 +549,8 @@ TEXT = {
         "local": "Local folder [{default}]: ",
         "refused": {"root": "Not the root folder.", "home": "Not your home folder or a folder above it.",
                     "file": "That is a file.", "nested": "It overlaps the folder already in sync.",
-                    "state": "That folder holds the sync's own data."},
+                    "state": "That folder holds the sync's own data.",
+                    "not_writable": "You cannot create or change files there."},
         "mode": "How should it sync?",
         "modes": ["Two-way (changes go both ways)", "Upload only (this computer -> Drive, never deletes on Drive)",
                   "Download only (Drive -> this computer, never deletes here)"],
@@ -560,7 +586,8 @@ TEXT = {
         "local": "Yerel klasör [{default}]: ",
         "refused": {"root": "Kök klasör olamaz.", "home": "Ev klasörünüz ya da onun üstü olamaz.",
                     "file": "Bu bir dosya.", "nested": "Senkrondaki klasörle iç içe.",
-                    "state": "Bu klasör senkronun kendi verilerini tutuyor."},
+                    "state": "Bu klasör senkronun kendi verilerini tutuyor.",
+                    "not_writable": "Oraya dosya oluşturamaz ya da değiştiremezsiniz."},
         "mode": "Nasıl senkronlansın?",
         "modes": ["İki yönlü (değişiklikler iki tarafa da gider)",
                   "Sadece yükleme (bu bilgisayar -> Drive, Drive'da hiçbir şey silinmez)",

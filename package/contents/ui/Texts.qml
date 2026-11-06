@@ -82,6 +82,8 @@ QtObject {
             return Lang.i18n("This folder overlaps the folder that is already in sync.");
         case "state":
             return Lang.i18n("This folder holds the sync service's own data.");
+        case "not_writable":
+            return Lang.i18n("You cannot create or change files there.");
         }
         return "";
     }

@@ -560,6 +560,9 @@ msgstr ""
 msgid "You can close this; the setup keeps running in the background."
 msgstr ""
 
+msgid "You cannot create or change files there."
+msgstr ""
+
 msgid ""
 "Your browser opens Google's sign-in page. rclone keeps the access key on "
 "this computer only."

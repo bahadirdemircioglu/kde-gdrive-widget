@@ -19,8 +19,9 @@ if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 20000000 ]; then mv -f "$LOG" "
 # Durum dosyasi (Plasma widget'i okur). Yardimci hata verse bile senkron etkilenmez.
 STATUS_BIN="$(dirname "$(readlink -f "$0")")/gdrive-status"
 status() {
-  [ -x "$STATUS_BIN" ] && GDRIVE_LOCAL="$LOCAL" GDRIVE_REMOTE="$REMOTE" GDRIVE_MODE="$MODE" \
-    "$STATUS_BIN" "$@" >/dev/null 2>&1
+  # python3 ile cagrilir: widget paketinden calisirken calistirma izni kaybolmus olabilir
+  [ -f "$STATUS_BIN" ] && GDRIVE_LOCAL="$LOCAL" GDRIVE_REMOTE="$REMOTE" GDRIVE_MODE="$MODE" \
+    python3 "$STATUS_BIN" "$@" >/dev/null 2>&1
   return 0
 }
 
