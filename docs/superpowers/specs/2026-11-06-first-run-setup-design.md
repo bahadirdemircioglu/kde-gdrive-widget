@@ -1,6 +1,6 @@
 # First-run setup and sync modes — design
 
-Status: draft for approval (builder check done) · 2026-11-06 · builds on 0.1.0 (widget + gdrive-status + bisync service)
+Status: approved and implemented in 0.2.0 · 2026-11-06 · builds on 0.1.0 (widget + gdrive-status + bisync service)
 
 ## Intent
 

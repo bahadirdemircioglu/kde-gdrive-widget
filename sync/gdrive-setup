@@ -378,8 +378,14 @@ def step_apply_run(remote, remote_path, local, mode, first):
                 raise StepError("sync", "making the folder match Drive failed")
             update_setup(setAside=aside)
         before = (read_status(p).get("lastRunAt"), read_status(p).get("logOffset"))
+        # The same two-way pair that already runs keeps its baseline: a --resync there would
+        # bring back files deleted on one side since the last run.
+        current = gc.effective()
+        same_pair = bool(mode == "twoway" and current and current["mode"] == "twoway"
+                         and current["target"] == target and norm_path(current["local"]) == local
+                         and os.path.exists(os.path.join(p["state"], "initialized")))
         # the first sync runs the scripts next to this file; nothing is installed yet
-        if run_sync(HERE, target, local, mode, resync=(mode == "twoway")) != 0:
+        if run_sync(HERE, target, local, mode, resync=(mode == "twoway" and not same_pair)) != 0:
             raise StepError("sync", "the first sync failed; see the log")
         st = read_status(p)
         if st.get("state") != "synced" or (st.get("lastRunAt"), st.get("logOffset")) == before:

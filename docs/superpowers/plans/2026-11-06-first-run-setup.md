@@ -163,8 +163,10 @@ The preview copy ran the real `gdrive-setup` for its wizard steps. A click on "S
 
 ### Task 10: End to end, release, live migration
 
-- [ ] E2E with real rclone and the existing `gdrive:` remote, temp `HOME` (copy of `rclone.conf` only), `REMOTE_PATH=_gdrive-sync-e2e-…` (created with two files), fake systemctl: `apply … twoway empty` → local equals Drive byte-level (`rclone lsf -R` both sides + `comm`, no `.conflict`, no extra files); then purge the scratch folder.
-- [ ] Version 0.2.0 (`metadata.json`), README (setup from widget/terminal, modes, safety), package `.plasmoid`, all tests green. Commit.
-- [ ] Merge `first-run-setup` into `main` in this checkout. Live: `gdrive-status show` → config written with `MODE=twoway`, `LEGACY=1`, state still `synced`, sync.log shows no extra run.
-- [ ] Live flag change: with the service paused, `rclone bisync ~/GoogleDrive gdrive: --dry-run <new ARGS>` → only new `.desktop` shortcuts on Path1, zero deletes. Then resume; next real run "Bisync successful". `scripts/install.sh` to upgrade the widget; screenshot popup.
-- [ ] Advisor check, push to GitHub, update memory note (config file, `gdrive-setup`).
+- [x] E2E with real rclone and the existing `gdrive:` remote, temp `HOME` (copy of `rclone.conf` only), `REMOTE_PATH=_gdrive-sync-e2e-…` (created with two files), fake systemctl: `apply … twoway empty` → local equals Drive byte-level (`rclone lsf -R` both sides + `comm`, no `.conflict`, no extra files); then purge the scratch folder.
+- [x] Version 0.2.0 (`metadata.json`), README (setup from widget/terminal, modes, safety), package `.plasmoid`, all tests green. Commit.
+- [x] Merge `first-run-setup` into `main` in this checkout. Live: `gdrive-status show` → config written with `MODE=twoway`, `LEGACY=1`, state still `synced`, sync.log shows no extra run.
+- [x] Live flag change: with the service paused, `rclone bisync ~/GoogleDrive gdrive: --dry-run <new ARGS>` → only new `.desktop` shortcuts on Path1, zero deletes. Then resume; next real run "Bisync successful". `scripts/install.sh` to upgrade the widget; screenshot popup.
+- [x] Advisor check, push to GitHub, update memory note (config file, `gdrive-setup`).
+
+Results 2026-11-06: E2E 21/21 + upload-only check against a scratch Drive folder in a temporary HOME (found and fixed: `--filter-from` for copy/sync/check, `rclone check --combined` signs). Live: settings migrated (`LEGACY=1`), dry-run showed only 14 new `.desktop` shortcuts and no deletes, first real run "Bisync successful", 8184 files, 3 Drive duplicates reported. Afterwards: "Change setup…" on the same running two-way pair no longer runs `--resync` (it would bring back files deleted since the last run).

@@ -324,6 +324,19 @@ class DetachedTest(SetupBase):
         self.assertFalse((self.home / ".local/bin/gdrive-status").exists())
         self.assertFalse((self.home / ".local/share/gdrive-sync/bin").exists())
 
+    def test_same_two_way_pair_is_not_resynced(self):
+        local = self.home / "GD"
+        local.mkdir()
+        (local / "a.txt").write_text("x")
+        self.write_config(local)
+        self.state.mkdir(parents=True, exist_ok=True)
+        (self.state / "initialized").touch()
+        self.setup("apply", "gdrive:", "", str(local), "twoway", "resume")
+        self.assertEqual(self.setup_json()["state"], "done", self.detached_out())
+        bisync = [c for c in self.rclone_calls() if c[0] == "bisync"]
+        self.assertEqual(len(bisync), 1)
+        self.assertNotIn("--resync", bisync[0])
+
     def test_offline_apply_fails(self):
         self.setup("apply", "gdrive:", "", str(self.home / "GD"), "download", "none", LSD_EXIT="1")
         self.assertEqual(self.setup_json()["error"]["code"], "offline")
