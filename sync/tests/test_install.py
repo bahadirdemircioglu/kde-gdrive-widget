@@ -82,7 +82,7 @@ class InstallTest(unittest.TestCase):
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((bin_dir / 'gdrive-status').read_text(), 'mine')
-        self.assertIn('dokunulmadi', result.stderr)
+        self.assertIn('dokunulmadı', result.stderr)
 
     def test_new_machine_without_terminal_points_to_gdrive_setup(self):
         result = self.run_install()

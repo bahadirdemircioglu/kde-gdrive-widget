@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gdrive-setup: first-run setup for the gdrive-sync service (terminal wizard and widget backend).
 
-  gdrive-setup                      interactive wizard (in a terminal)
+  gdrive-setup                      interactive wizard (in a terminal; also: gdrive-setup wizard)
   gdrive-setup <step> ... --json    one step, JSON on stdout (used by the Plasma widget)
 
 Steps:
@@ -501,6 +501,206 @@ def install_service(dev=False, start=False):
             "skippedLinks": skipped}
 
 
+# ---------- terminal wizard ----------
+
+TEXT = {
+    "en": {
+        "title": "Google Drive sync setup",
+        "missing": "Missing requirements:",
+        "install": "Install them with:\n  {cmd}\nthen run gdrive-setup again.",
+        "no_inotify": "inotify-tools is not installed: local changes are picked up every 5 minutes.",
+        "already": "Already set up: {target} <-> {local} ({mode}). Change it? [y/N] ",
+        "account": "Google account (rclone connection):",
+        "new_account": "Connect a new Google account",
+        "choose": "Choose [{default}]: ",
+        "login": "A browser window opens: sign in to Google and allow access.",
+        "login_failed": "The Google login did not finish.",
+        "drive": "Which part of Google Drive?",
+        "whole": "All of My Drive",
+        "pick": "Choose a folder",
+        "in_folder": "In: {path}",
+        "use_this": "Use this folder",
+        "up": "Up one level",
+        "local": "Local folder [{default}]: ",
+        "refused": {"root": "Not the root folder.", "home": "Not your home folder or a folder above it.",
+                    "file": "That is a file.", "nested": "It overlaps the folder already in sync.",
+                    "state": "That folder holds the sync's own data."},
+        "mode": "How should it sync?",
+        "modes": ["Two-way (changes go both ways)", "Upload only (this computer -> Drive, never deletes on Drive)",
+                  "Download only (Drive -> this computer, never deletes here)"],
+        "checking": "Comparing the folder with Drive...",
+        "preview": "Only on Drive: {onlyDrive}   only here: {onlyLocal}   different: {different}   same: {same}",
+        "choice": "This folder already has files. Merging two different sets of files creates duplicates.",
+        "choices": ["Use another, empty folder (recommended)",
+                    "Make this folder match Drive (files only here are moved to {aside}, not deleted)",
+                    "Merge both (files only here are uploaded; for different files the newer wins)"],
+        "summary": "\n  Drive:  {target}\n  Folder: {local}\n  Mode:   {mode}\n\nStart? [Y/n] ",
+        "running": "First sync is running (log: {log}). Ctrl+C stops it; files already copied stay.",
+        "done": "Done. The sync service is running and starts with your session.",
+        "failed": "Setup failed: {message}",
+        "cancelled": "Stopped. Run gdrive-setup again to continue where it stopped.",
+    },
+    "tr": {
+        "title": "Google Drive senkron kurulumu",
+        "missing": "Eksik gereksinimler:",
+        "install": "Kurmak için:\n  {cmd}\nsonra gdrive-setup'ı yeniden çalıştırın.",
+        "no_inotify": "inotify-tools kurulu değil: yerel değişiklikler 5 dakikada bir algılanır.",
+        "already": "Zaten kurulu: {target} <-> {local} ({mode}). Değiştirilsin mi? [e/H] ",
+        "account": "Google hesabı (rclone bağlantısı):",
+        "new_account": "Yeni bir Google hesabı bağla",
+        "choose": "Seçim [{default}]: ",
+        "login": "Tarayıcı açılacak: Google'a giriş yapıp erişime izin verin.",
+        "login_failed": "Google girişi tamamlanmadı.",
+        "drive": "Google Drive'ın hangi kısmı?",
+        "whole": "Drive'ım'ın tamamı",
+        "pick": "Bir klasör seç",
+        "in_folder": "Konum: {path}",
+        "use_this": "Bu klasörü kullan",
+        "up": "Bir üst klasör",
+        "local": "Yerel klasör [{default}]: ",
+        "refused": {"root": "Kök klasör olamaz.", "home": "Ev klasörünüz ya da onun üstü olamaz.",
+                    "file": "Bu bir dosya.", "nested": "Senkrondaki klasörle iç içe.",
+                    "state": "Bu klasör senkronun kendi verilerini tutuyor."},
+        "mode": "Nasıl senkronlansın?",
+        "modes": ["İki yönlü (değişiklikler iki tarafa da gider)",
+                  "Sadece yükleme (bu bilgisayar -> Drive, Drive'da hiçbir şey silinmez)",
+                  "Sadece indirme (Drive -> bu bilgisayar, burada hiçbir şey silinmez)"],
+        "checking": "Klasör Drive ile karşılaştırılıyor...",
+        "preview": "Sadece Drive'da: {onlyDrive}   sadece burada: {onlyLocal}   farklı: {different}   aynı: {same}",
+        "choice": "Bu klasörde zaten dosya var. İki farklı dosya kümesini birleştirmek kopyalar oluşturur.",
+        "choices": ["Başka, boş bir klasör kullan (önerilen)",
+                    "Bu klasörü Drive'a eşitle (sadece burada olanlar silinmez, {aside} altına taşınır)",
+                    "İkisini birleştir (sadece burada olanlar yüklenir; farklı dosyada yeni olan kazanır)"],
+        "summary": "\n  Drive:  {target}\n  Klasör: {local}\n  Mod:    {mode}\n\nBaşlasın mı? [E/h] ",
+        "running": "İlk senkron çalışıyor (günlük: {log}). Ctrl+C durdurur; kopyalanan dosyalar kalır.",
+        "done": "Tamam. Senkron servisi çalışıyor ve oturumla birlikte başlar.",
+        "failed": "Kurulum başarısız: {message}",
+        "cancelled": "Durduruldu. Kaldığı yerden devam etmek için gdrive-setup'ı yeniden çalıştırın.",
+    },
+}
+
+
+def menu(t, ask, say, options, default=1):
+    for i, label in enumerate(options, 1):
+        say(f"  {i}) {label}")
+    while True:
+        answer = ask(t["choose"].format(default=default)).strip()
+        if not answer:
+            return default
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            return int(answer)
+
+
+def wizard(ask=input, say=print):
+    lang = "tr" if (os.environ.get("LANG") or "").startswith("tr") else "en"
+    t = TEXT[lang]
+    yes = ("e", "evet", "y", "yes") if lang == "tr" else ("y", "yes")
+    say(t["title"] + "\n")
+    c = gc.checks()
+    missing = [n for n, ok in (("rclone >= 1.66", c["rcloneOk"]), ("systemd", c["systemd"])) if not ok]
+    if missing:
+        say(t["missing"] + " " + ", ".join(missing))
+        if c["installCommand"]:
+            say(t["install"].format(cmd=c["installCommand"]))
+        return 1
+    if not c["inotify"]:
+        say(t["no_inotify"] + (f"\n  {c['installCommand']}" if c["installCommand"] else "") + "\n")
+    current = gc.effective()
+    if current and ask(t["already"].format(target=current["target"], local=current["local"],
+                                           mode=current["mode"])).strip().lower() not in yes:
+        return 0
+
+    # account
+    r = step_remotes()
+    say(t["account"])
+    names = [x["name"] for x in r["remotes"]]
+    pick = menu(t, ask, say, names + [t["new_account"]])
+    created = False
+    if pick > len(names):
+        remote = r["suggestName"]
+        say(t["login"])
+        exe = os.environ.get("GDRIVE_RCLONE") or "rclone"
+        if subprocess.run([exe, "config", "create", remote.rstrip(":"), "drive", "scope=drive"]).returncode != 0:
+            rclone(["config", "delete", remote.rstrip(":")], timeout=30)
+            say(t["login_failed"])
+            return 1
+        created = True
+    else:
+        remote = names[pick - 1]
+
+    # Drive folder
+    say("\n" + t["drive"])
+    remote_path = ""
+    if menu(t, ask, say, [t["whole"], t["pick"]]) == 2:
+        while True:
+            folders = step_drive_folders(remote, remote_path)["folders"]
+            say(t["in_folder"].format(path=target_of(remote, remote_path)))
+            options = [t["use_this"]] + ([t["up"]] if remote_path else []) + folders
+            n = menu(t, ask, say, options)
+            if n == 1:
+                break
+            if remote_path and n == 2:
+                remote_path = remote_path.rpartition("/")[0]
+                continue
+            remote_path = "/".join(x for x in (remote_path, options[n - 1]) if x)
+
+    # local folder, mode, first sync
+    modes = list(gc.MODES)
+    default_local = os.path.join(gc.paths()["home"], "GoogleDrive")
+    while True:
+        say("")
+        local = ask(t["local"].format(default=default_local)).strip() or default_local
+        chk = step_check_local(local)
+        if not chk["ok"]:
+            say(t["refused"][chk["reason"]])
+            continue
+        local = chk["path"]
+        say("\n" + t["mode"])
+        mode = modes[menu(t, ask, say, t["modes"]) - 1]
+        first = "none"
+        if mode == "twoway":
+            if chk["empty"]:
+                first = "empty"
+            elif chk["ours"]:
+                first = "resume"
+            else:
+                say(t["checking"])
+                pv = step_preview(remote, remote_path, local)
+                say(t["preview"].format(**pv))
+                first = "merge"
+                if pv["needsChoice"]:
+                    say(t["choice"])
+                    aside = os.path.join(gc.paths()["share"], "set-aside-" + datetime.date.today().isoformat())
+                    n = menu(t, ask, say, [x.format(aside=aside) for x in t["choices"]])
+                    if n == 1:
+                        default_local = os.path.join(gc.paths()["home"], "GoogleDrive2") \
+                            if local == default_local else default_local
+                        continue
+                    first = "match" if n == 2 else "merge"
+        break
+
+    mode_label = t["modes"][modes.index(mode)].split(" (")[0]
+    if ask(t["summary"].format(target=target_of(remote, remote_path), local=local,
+                               mode=mode_label)).strip().lower() not in yes + ("",):
+        return 0
+    save_setup({"step": "apply", "state": "running", "unit": None, "pid": os.getpid(),
+                "startedAt": now_iso(), "error": None,
+                "target": {"remote": remote, "remotePath": remote_path, "local": local, "mode": mode,
+                           "firstSync": first, "createdRemote": created}})
+    say(t["running"].format(log=os.path.join(gc.paths()["state"], "sync.log")))
+    try:
+        rc = step_apply_run(remote, remote_path, local, mode, first)
+    except KeyboardInterrupt:
+        update_setup(state="cancelled", finishedAt=now_iso())
+        say("\n" + t["cancelled"])
+        return 130
+    if rc != 0:
+        say(t["failed"].format(message=((load_setup() or {}).get("error") or {}).get("message", "")))
+        return 1
+    say(t["done"])
+    return 0
+
+
 # ---------- command line ----------
 
 def run_step(name, args, flags):
@@ -533,9 +733,13 @@ def run_step(name, args, flags):
 def main(argv):
     flags = {a for a in argv[1:] if a.startswith("--")}
     args = [a for a in argv[1:] if not a.startswith("--")]
+    if not args and sys.stdin.isatty() and sys.stdout.isatty():
+        return wizard()
     if not args:
         print(__doc__, file=sys.stderr)
         return 2
+    if args[0] == "wizard":
+        return wizard()
     if args[0] == "connect-run" and len(args) == 2:
         return step_connect_run(args[1])
     if args[0] == "apply-run" and len(args) == 6:

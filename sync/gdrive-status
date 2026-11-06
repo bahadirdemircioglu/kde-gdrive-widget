@@ -306,6 +306,16 @@ def unit_active(unit):
         return False
 
 
+def pid_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except PermissionError:
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def _age_seconds(iso):
     try:
         return (datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(iso)).total_seconds()
@@ -319,8 +329,11 @@ def setup_view():
     data = load_json(gc.paths()["setupJson"])
     if not data or data.get("state") != "running":
         return data
-    unit = data.get("unit") or f"gdrive-setup-{data.get('step')}.service"
-    if not unit_active(unit) and _age_seconds(data.get("startedAt")) > 10:
+    if data.get("pid"):  # terminal wizard: runs in the foreground
+        alive = pid_alive(data["pid"])
+    else:
+        alive = unit_active(data.get("unit") or f"gdrive-setup-{data.get('step')}.service")
+    if not alive and _age_seconds(data.get("startedAt")) > 10:
         return dict(data, state="failed", error={"code": "interrupted", "message": "setup was interrupted"})
     if data.get("step") == "apply":
         st = load_status()

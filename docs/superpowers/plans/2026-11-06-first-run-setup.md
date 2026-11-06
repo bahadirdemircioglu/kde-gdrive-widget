@@ -130,8 +130,8 @@ Scratch: remote folder `gdrive:_gdrive-sync-test-2026-11-06`, local + `--workdir
 
 **Files:** Modify `sync/gdrive-setup` (no-arg TTY path), `sync/tests/test_setup.py`.
 
-- [ ] Interactive flow uses the same step functions in-process (not detached): check (print `installCommand`, stop if required missing) → account (existing drive remotes numbered, or "new": runs `rclone config create` in the foreground so the browser opens) → Drive folder (root default; browse one level at a time) → local folder (default `~/GoogleDrive`, `check-local`) → mode (1 two-way default, 2 upload only, 3 download only) → preview + choice when `needsChoice` (1 another empty folder [default], 2 make this folder match Drive, 3 merge, with the duplicate warning) → summary, confirm → apply in-process with a one-line progress → service enabled. Turkish when `LANG` starts with `tr`, English otherwise.
-- [ ] Test: drive stdin through the happy path with fakes (`printf '\n\n\n1\ny\n'`) → config written, `enable --now` called. Non-TTY without args → prints usage, exit 2. Commit.
+- [x] Interactive flow uses the same step functions in-process (not detached): check (print `installCommand`, stop if required missing) → account (existing drive remotes numbered, or "new": runs `rclone config create` in the foreground so the browser opens) → Drive folder (root default; browse one level at a time) → local folder (default `~/GoogleDrive`, `check-local`) → mode (1 two-way default, 2 upload only, 3 download only) → preview + choice when `needsChoice` (1 another empty folder [default], 2 make this folder match Drive, 3 merge, with the duplicate warning) → summary, confirm → apply in-process with a one-line progress → service enabled. Turkish when `LANG` starts with `tr`, English otherwise.
+- [x] Test: drive stdin through the happy path with fakes (`printf '\n\n\n1\ny\n'`) → config written, `enable --now` called. Non-TTY without args → prints usage, exit 2 (`gdrive-setup wizard` forces the wizard; the foreground run records its `pid` in setup.json instead of a unit). Commit.
 
 ### Task 8: Widget logic
 

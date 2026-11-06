@@ -356,6 +356,57 @@ class DetachedTest(SetupBase):
         self.assertTrue([c for c in self.rclone_calls() if c[:3] == ["config", "delete", "gdrive"]])
 
 
+class WizardTest(SetupBase):
+    def wizard(self, answers, **env):
+        return subprocess.run([sys.executable, str(self.src / "gdrive-setup"), "wizard"], input=answers,
+                              env=dict(self.env, LANG="en_US.UTF-8", **env), capture_output=True, text=True)
+
+    def test_happy_path_with_defaults(self):
+        local = self.home / "Google Drive"
+        # account 1 (gdrive:), whole Drive, folder, two-way, confirm
+        p = self.wizard(f"\n\n{local}\n\n\n")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        cfg = (self.home / ".config/gdrive-sync/config").read_text()
+        self.assertIn(f"LOCAL={local}\n", cfg)
+        self.assertIn("MODE=twoway\n", cfg)
+        self.assertIn("--user enable --now gdrive-sync.service", self.systemctl_calls())
+        self.assertIn("Done.", p.stdout)
+
+    def test_browse_drive_folder_and_download_only(self):
+        # account 1, choose a folder -> pick "Belgeler" (3rd option: use this / Belgeler / Foto...)
+        # -> inside Belgeler: use this (1); local; mode 3; confirm
+        p = self.wizard(f"1\n2\n2\n1\n{self.home / 'B'}\n3\ny\n")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        cfg = (self.home / ".config/gdrive-sync/config").read_text()
+        self.assertIn("REMOTE_PATH=Belgeler\n", cfg)
+        self.assertIn("MODE=download\n", cfg)
+
+    def test_refused_folder_is_asked_again_and_full_folder_offers_choices(self):
+        full = self.home / "Dolu"
+        full.mkdir()
+        (full / "only-here.txt").write_text("x")
+        check = self.t / "check.txt"
+        check.write_text("+ only-here.txt\n- a.pdf\n")
+        # home refused -> full folder -> two-way -> choice 2 (match) -> confirm
+        p = self.wizard(f"\n\n{self.home}\n{full}\n1\n2\n\n", FAKE_CHECK=str(check))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("Not your home folder", p.stdout)
+        self.assertIn("only here: 1", p.stdout)
+        self.assertTrue(list((self.home / ".local/share/gdrive-sync").glob("set-aside-*/only-here.txt")))
+
+    def test_missing_rclone_shows_install_command(self):
+        self.fake("pacman", "#!/bin/sh\nexit 0\n")
+        p = self.wizard("", GDRIVE_RCLONE="no-such-rclone")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("sudo pacman -S --needed rclone", p.stdout)
+
+    def test_no_args_without_terminal_prints_usage(self):
+        p = subprocess.run([sys.executable, str(self.src / "gdrive-setup")], input="", env=self.env,
+                           capture_output=True, text=True)
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("gdrive-setup <step>", p.stderr)
+
+
 class ShowSetupTest(SetupBase):
     def show(self):
         p = subprocess.run([sys.executable, str(self.src / "gdrive-status"), "show"],
